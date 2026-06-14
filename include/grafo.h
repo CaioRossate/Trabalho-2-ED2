@@ -157,10 +157,38 @@ Vertice getArestaDestino(Aresta a);
 
 /**
  * @brief Atualiza a velocidade média de uma aresta.
- * @param a     A aresta.
+ * @param a A aresta.
  * @param nova_vm Nova velocidade média em m/s.
  */
 void setArestaVm(Aresta a, double nova_vm);
+
+/**
+ * @brief Verifica se uma aresta está ativa (habilitada).
+ * @details Arestas inativas são ignoradas pelos iteradores e pelo Dijkstra.
+ * Por padrão todas as arestas são criadas ativas.
+ * @param a A aresta.
+ * @return true se ativa, false se desabilitada.
+ */
+bool getArestaAtiva(Aresta a);
+ 
+/**
+ * @brief Desabilita uma aresta, fazendo-a ser ignorada pelos iteradores.
+ * @param a A aresta a desabilitar.
+ */
+void desabilitarAresta(Aresta a);
+ 
+/**
+ * @brief Reabilita uma aresta previamente desabilitada.
+ * @param a A aresta a reabilitar.
+ */
+void habilitarAresta(Aresta a);
+ 
+/**
+ * @brief Reabilita todas as arestas do grafo.
+ * @details Útil após operações que desabilitam arestas temporariamente, como o cálculo de componentes conexos em regs.
+ * @param g O grafo.
+ */
+void habilitarTodasArestas(Grafo g);
 
 
 // Iteração sobre adjacências

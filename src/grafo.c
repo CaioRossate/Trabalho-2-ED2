@@ -25,6 +25,7 @@ typedef struct aresta_t {
     char lesq[32];
     double cmp;
     double vm;
+    int ativo; // 1 = ativa, 0 = desativada
     struct aresta_t* prox_global; // encadeamento na lista global de arestas
 } aresta_t;
 
@@ -159,7 +160,8 @@ Aresta inserirAresta(Grafo g, const char* id_i, const char* id_j, const char* no
     strncpy(a->lesq, lesq, 31);
     a->cmp = cmp;
     a->vm  = vm;
-
+    a->ativo = 1; // por padrão, todas as arestas são criadas ativas
+    
     // Adiciona na lista de adjacência do vértice de origem
     aresta_no_t* no = malloc(sizeof(aresta_no_t));
     if (!no) { free(a); return NULL; }
@@ -209,6 +211,26 @@ void setArestaVm(Aresta a, double nova_vm) {
     if (a) ((aresta_t*)a)->vm = nova_vm;
 }
 
+bool getArestaAtiva(Aresta a) {
+    return a ? ((aresta_t*)a)->ativo : false;
+}
+
+void desabilitarAresta(Aresta a) {
+    if (a) ((aresta_t*)a)->ativo = 0;
+}
+
+void habilitarAresta(Aresta a) {
+    if (a) ((aresta_t*)a)->ativo = 1;
+}
+
+void habilitarTodasArestas(Grafo g) {
+    if (!g) return;
+    aresta_t* a = ((grafo_t*)g)->arestas;
+    while (a) {
+        a->ativo = 1;
+        a = a->prox_global;
+    }
+}
 
 // Iteradores
 
@@ -216,7 +238,9 @@ void iterarAdjacentes(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta
     if (!g || !v || !visitar) return;
     aresta_no_t* no = ((vertice_t*)v)->adj;
     while (no) {
-        visitar((Aresta)no->aresta, contexto);
+        // Só visita arestas ativas
+        if (no->aresta->ativo)
+            visitar((Aresta)no->aresta, contexto);
         no = no->prox;
     }
 }
@@ -234,6 +258,7 @@ void iterarArestas(Grafo g, void* contexto, void (*visitar)(Aresta, void*)) {
     if (!g || !visitar) return;
     aresta_t* a = ((grafo_t*)g)->arestas;
     while (a) {
+        if (a->ativo)
         visitar((Aresta)a, contexto);
         a = a->prox_global;
     }

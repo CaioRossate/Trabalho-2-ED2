@@ -1,0 +1,500 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <float.h>
+#include "qry.h"
+#include "grafo.h"
+#include "dijkstra.h"
+#include "hashing.h"
+#include "geo.h"
+
+#define MAX_REG 11
+
+// Registradores geográficos: vértice mais próximo ao endereço
+static Vertice registradores[MAX_REG];
+
+// utility
+
+static double distEuclid(double x1, double y1, double x2, double y2) {
+    double dx = x2-x1, dy = y2-y1;
+    return sqrt(dx*dx + dy*dy);
+}
+
+// Calcula coordenada de um endereço cep/face/num usando o hash de quadras
+static void coordEndereco(Hash h_q, char* cep, char face, double num, double* ex, double* ey) {
+    void* qbuf = malloc(getQuadraSize());
+    *ex = 0.0; *ey = 0.0;
+    if (!buscarHash(h_q, cep, qbuf)) {
+        free(qbuf); 
+        return; 
+    }
+
+    double x = getQuadraX(qbuf), y = getQuadraY(qbuf);
+    double w = getQuadraW(qbuf), h = getQuadraH(qbuf);
+
+    if (face == 'N') { 
+        *ex = x + (num/100.0)*w; *ey = y;
+    } else if (face == 'S') { 
+        *ex = x + (num/100.0)*w; *ey = y + h;
+    } else if (face == 'L') { 
+        *ex = x + w; *ey = y + (num/100.0)*h;
+    } else if (face == 'O') { 
+        *ex = x; 
+        *ey = y + (num/100.0)*h;
+    }
+    free(qbuf);
+}
+
+// Contexto para busca do vértice mais próximo usando ldir/lesq
+typedef struct {
+    char cep[32];
+    double px, py;
+    double menor;
+    Vertice mais_proximo;
+} CtxProximo;
+
+static void verificarArestaProx(Aresta a, void* ctx) {
+    CtxProximo* c = (CtxProximo*)ctx;
+    // Só considera arestas adjacentes à quadra do endereço 
+    if (strcmp(getArestaLdir(a), c->cep) != 0 && strcmp(getArestaLesq(a), c->cep) != 0) return;
+
+    Vertice vo = getArestaOrigem(a);
+    Vertice vd = getArestaDestino(a);
+    double do_ = distEuclid(c->px, c->py, getVerticeX(vo), getVerticeY(vo));
+    double dd  = distEuclid(c->px, c->py, getVerticeX(vd), getVerticeY(vd));
+    if (do_ < c->menor) {
+        c->menor = do_; 
+        c->mais_proximo = vo;
+    }
+    if (dd < c->menor) { 
+        c->menor = dd;  
+        c->mais_proximo = vd; 
+    }
+}
+
+// Fallback: busca euclidiana em todos os vértices (caso o CEP não seja encontrado)
+static void verificarVerticeProx(Vertice v, void* ctx) {
+    CtxProximo* c = (CtxProximo*)ctx;
+    double d = distEuclid(c->px, c->py, getVerticeX(v), getVerticeY(v));
+    if (d < c->menor) { 
+        c->menor = d; 
+        c->mais_proximo = v; 
+    }
+}
+
+static Vertice verticeProximoEndereco(Grafo grafo, Hash h_q, char* cep, char face, double num) {
+    double ex, ey;
+    coordEndereco(h_q, cep, face, num, &ex, &ey);
+
+    CtxProximo ctx;
+    strncpy(ctx.cep, cep, 31); 
+    ctx.cep[31] = '\0';
+    ctx.px = ex; 
+    ctx.py = ey;
+    ctx.menor = DBL_MAX; 
+    ctx.mais_proximo = NULL;
+
+    // Tenta primeiro pelas arestas que têm o CEP como ldir ou lesq 
+    iterarArestas(grafo, &ctx, verificarArestaProx);
+
+    // Se não encontrou nenhuma aresta com o CEP, usa busca global
+    if (!ctx.mais_proximo)
+        iterarVertices(grafo, &ctx, verificarVerticeProx);
+
+    return ctx.mais_proximo;
+}
+
+//Pré-leitura: sem rq no T2, retorna 0
+
+int coletarCepsRemovidos(const char* path_qry, char ceps_out[][20], int max_ceps) {
+    (void)path_qry; 
+    (void)ceps_out; 
+    (void)max_ceps;
+    return 0;
+}
+
+// Qry
+
+void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt, FILE* fSvg) {
+    FILE* arq = fopen(path_qry, "r");
+    if (!arq) {
+        printf("Erro ao abrir .qry: %s\n", path_qry);
+        return; 
+    }
+
+    for (int i = 0; i < MAX_REG; i++) registradores[i] = NULL;
+
+    char cmd[16];
+    while (fscanf(arq, "%15s", cmd) != EOF) {
+
+        if (strcmp(cmd, "@o?") == 0) {
+            int reg; char cep[32], face_str[4]; 
+            double num;
+            if (fscanf(arq, "%d %31s %3s %lf", &reg, cep, face_str, &num) != 4) continue;
+            if (reg >= 0 && reg < MAX_REG) {
+                registradores[reg] = verticeProximoEndereco(grafo, h_q, cep, face_str[0], num);
+                double ex, ey;
+                coordEndereco(h_q, cep, face_str[0], num, &ex, &ey);
+                comando_o(grafo, reg, ex, ey, fTxt, fSvg);
+            }
+
+        } else if (strcmp(cmd, "mvm") == 0) {
+            double v, x, y, w, h;
+            if (fscanf(arq, "%lf %lf %lf %lf %lf", &v, &x, &y, &w, &h) != 5) continue;
+            comando_mvm(grafo, v, x, y, w, h);
+
+        } else if (strcmp(cmd, "regs") == 0) {
+            double vl;
+            if (fscanf(arq, "%lf", &vl) != 1) continue;
+            comando_regs(grafo, vl, fTxt, fSvg);
+
+        } else if (strcmp(cmd, "exp") == 0) {
+            double vl;
+            if (fscanf(arq, "%lf", &vl) != 1) continue;
+            comando_exp(grafo, vl, fSvg);
+
+        } else if (strcmp(cmd, "p?") == 0) {
+            int reg1, reg2; char cc[32], cr[32];
+            if (fscanf(arq, "%d %d %31s %31s", &reg1, &reg2, cc, cr) != 4) continue;
+            comando_p(grafo, reg1, reg2, cc, cr, fTxt, fSvg);
+
+        } else {
+            char lixo[256];
+            fgets(lixo, sizeof(lixo), arq);
+        }
+    }
+    fclose(arq);
+}
+
+// @o? — registrador geográfico   
+
+void comando_o(void* grafo, int reg, double ex, double ey, FILE* fTxt, FILE* fSvg) {
+    (void)grafo;
+    if (reg < 0 || reg >= MAX_REG) return;
+
+    Vertice v = registradores[reg];
+    if (!v) {
+        fprintf(fTxt, "@o? R%d: nenhum vertice encontrado para o endereco.\n", reg);
+        return;
+    }
+
+    fprintf(fTxt, "@o? R%d: coord=(%.2lf,%.2lf) vertice=%s (%.2lf,%.2lf)\n", reg, ex, ey, getVerticeId(v), getVerticeX(v), getVerticeY(v));
+
+    // Linha vertical pontilhada vermelha na coordenada X do endereço
+    fprintf(fSvg, "\t<line x1=\"%lf\" y1=\"0\" x2=\"%lf\" y2=\"9999\""
+        " stroke=\"red\" stroke-width=\"1\" stroke-dasharray=\"5,3\"/>\n", ex, ex);
+    // Número do registrador no topo
+    fprintf(fSvg, "\t<text x=\"%lf\" y=\"12\" fill=\"red\" font-size=\"10\"" " text-anchor=\"middle\">R%d</text>\n", ex, reg);
+}
+
+// mvm — atualiza velocidade média numa região
+
+typedef struct { 
+    double v, x, y, w, h; 
+} CtxMvm;
+
+static void atualizarVmRegiao(Aresta a, void* ctx) {
+    CtxMvm* c = (CtxMvm*)ctx;
+    double ox = getVerticeX(getArestaOrigem(a));
+    double oy = getVerticeY(getArestaOrigem(a));
+    double dx = getVerticeX(getArestaDestino(a));
+    double dy = getVerticeY(getArestaDestino(a));
+    if (ox >= c->x && ox <= c->x+c->w && oy >= c->y && oy <= c->y+c->h &&
+        dx >= c->x && dx <= c->x+c->w && dy >= c->y && dy <= c->y+c->h)
+        setArestaVm(a, c->v);
+}
+
+void comando_mvm(void* grafo, double v, double x, double y, double w, double h) {
+    CtxMvm ctx = { v, x, y, w, h };
+    iterarArestas(grafo, &ctx, atualizarVmRegiao);
+}
+
+// regs — componentes conexos por Union-Find     
+
+// Union-Find global (alocado por comando_regs, liberado ao final)
+static int* uf_pai = NULL;
+static int  uf_n   = 0;
+
+static int uf_find(int x) {
+    while (uf_pai[x] != x) {
+        uf_pai[x] = uf_pai[uf_pai[x]]; // path compression
+        x = uf_pai[x];
+    }
+    return x;
+}
+
+static void uf_unir(int a, int b) {
+    a = uf_find(a); b = uf_find(b);
+    if (a != b) uf_pai[b] = a;
+}
+
+typedef struct { 
+    double vl; 
+} CtxUF;
+
+static void unirArestaLenta(Aresta a, void* ctx) {
+    CtxUF* c = (CtxUF*)ctx;
+    if (getArestaVm(a) < c->vl) uf_unir(getVerticeIndice(getArestaOrigem(a)), getVerticeIndice(getArestaDestino(a)));
+}
+
+/* Bounding box por componente */
+typedef struct {
+    int* raizes;
+    int n_comp;
+    double* mn_x; 
+    double* mn_y;
+    double* mx_x; 
+    double* mx_y;
+} CtxBBox;
+
+static void acumularBBox(Vertice v, void* ctx) {
+    CtxBBox* c = (CtxBBox*)ctx;
+    int raiz = uf_find(getVerticeIndice(v));
+    int slot = -1;
+    for (int i = 0; i < c->n_comp; i++)
+        if (c->raizes[i] == raiz) { 
+            slot = i; 
+            break; 
+        }
+    if (slot < 0) return;
+    double x = getVerticeX(v), y = getVerticeY(v);
+    if (x < c->mn_x[slot]) c->mn_x[slot] = x;
+    if (y < c->mn_y[slot]) c->mn_y[slot] = y;
+    if (x > c->mx_x[slot]) c->mx_x[slot] = x;
+    if (y > c->mx_y[slot]) c->mx_y[slot] = y;
+}
+
+static void gerarCorAleatoria(char* buffer) {
+    sprintf(buffer, "#%06X", rand() % 0xFFFFFF);
+}
+
+// Coleta raízes únicas dos componentes 
+typedef struct { 
+    int* raizes; 
+    int n; 
+    int cap; 
+} CtxRaizes;
+
+static void coletarRaiz(Vertice v, void* ctx) {
+    CtxRaizes* c = (CtxRaizes*)ctx;
+    int r = uf_find(getVerticeIndice(v));
+    for (int i = 0; i < c->n; i++) if (c->raizes[i] == r) return;
+    if (c->n < c->cap) c->raizes[c->n++] = r;
+}
+
+// Desabilita arestas com vm >= vl (as "rápidas" ficam fora do cálculo de componentes)
+typedef struct { 
+    double vl; 
+} CtxDesabilitar;
+
+static void desabilitarRapidas(Aresta a, void* ctx) {
+    CtxDesabilitar* c = (CtxDesabilitar*)ctx;
+    if (getArestaVm(a) >= c->vl) desabilitarAresta(a);
+}
+
+void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
+    int n = getNumVertices(grafo);
+    uf_n = n;
+    uf_pai = malloc(sizeof(int) * n);
+    for (int i = 0; i < n; i++) uf_pai[i] = i;
+
+    // 1. Garante estado limpo e desabilita arestas rápidas (vm >= vl).
+    // Após isso, iterarArestas só enxerga as lentas.
+    habilitarTodasArestas(grafo);
+    CtxDesabilitar ctx_des = { vl };
+    iterarArestas(grafo, &ctx_des, desabilitarRapidas);
+
+    // 2. Calcula componentes conexos apenas sobre as arestas lentas
+    CtxUF ctx_uf = { vl };
+    iterarArestas(grafo, &ctx_uf, unirArestaLenta);
+
+    // 3. Reabilita todas as arestas — estado do grafo restaurado
+    habilitarTodasArestas(grafo);
+
+    // 4. Coleta raízes únicas dos componentes 
+    int* raizes = malloc(sizeof(int) * n);
+    CtxRaizes ctx_r = { raizes, 0, n };
+    iterarVertices(grafo, &ctx_r, coletarRaiz);
+    int n_comp = ctx_r.n;
+
+    fprintf(fTxt, "regs %.2lf: %d componente(s) conexo(s)\n", vl, n_comp);
+
+    // 5. Bounding boxes por componente
+    double* mn_x = malloc(sizeof(double) * n_comp);
+    double* mn_y = malloc(sizeof(double) * n_comp);
+    double* mx_x = malloc(sizeof(double) * n_comp);
+    double* mx_y = malloc(sizeof(double) * n_comp);
+    for (int i = 0; i < n_comp; i++) {
+        mn_x[i] =  DBL_MAX; mn_y[i] =  DBL_MAX;
+        mx_x[i] = -DBL_MAX; mx_y[i] = -DBL_MAX;
+    }
+    CtxBBox ctx_bb = { raizes, n_comp, mn_x, mn_y, mx_x, mx_y };
+    iterarVertices(grafo, &ctx_bb, acumularBBox);
+
+    double margem = 5.0;
+    for (int i = 0; i < n_comp; i++) {
+        char cor[10];
+        gerarCorAleatoria(cor);
+        fprintf(fSvg, "\t<rect x=\"%lf\" y=\"%lf\" width=\"%lf\" height=\"%lf\""
+            " fill=\"%s\" fill-opacity=\"0.5\" stroke=\"gray\" stroke-width=\"1\"/>\n",
+            mn_x[i]-margem, mn_y[i]-margem, (mx_x[i]-mn_x[i])+2*margem, (mx_y[i]-mn_y[i])+2*margem,cor);
+    }
+
+    free(mn_x); 
+    free(mn_y); 
+    free(mx_x); 
+    free(mx_y);
+    free(raizes); 
+    free(uf_pai); 
+    uf_pai = NULL; 
+    uf_n = 0;
+}
+
+// exp — AGM (Prim) + aumenta vm 50% nas arestas lentas 
+
+typedef struct {
+    int* visitado;
+    double* menor_peso;
+    Aresta* melhor;
+    int* invertida;  // 1 se a aresta foi usada no sentido inverso (não-direcionado)
+} CtxPrim;
+
+// Prim não-direcionado: avalia a aresta se UM dos extremos está visitado e o OUTRO não — trata o grafo direcionado como não-direcionado.
+static void avaliarArestaPrim(Aresta a, void* ctx) {
+    CtxPrim* c = (CtxPrim*)ctx;
+    int io = getVerticeIndice(getArestaOrigem(a));
+    int id = getVerticeIndice(getArestaDestino(a));
+
+    // Caso direcionado normal: origem visitada, destino não
+    int caso1 = c->visitado[io] && !c->visitado[id];
+    // Caso não-direcionado: destino visitado, origem não
+    int caso2 = c->visitado[id] && !c->visitado[io];
+
+    if (!caso1 && !caso2) return;
+    if (getArestaCmp(a) < *c->menor_peso) {
+        *c->menor_peso = getArestaCmp(a);
+        *c->melhor = a;
+        *c->invertida = caso2; // sinaliza se a aresta foi usada ao contrário
+    }
+}
+
+typedef struct { 
+    Vertice* primeiro; 
+} CtxPrimeiro;
+
+static void pegarPrimeiro(Vertice v, void* ctx) {
+    CtxPrimeiro* c = (CtxPrimeiro*)ctx;
+    if (!(*c->primeiro)) *c->primeiro = v;
+}
+
+void comando_exp(void* grafo, double vl, FILE* fSvg) {
+    int n = getNumVertices(grafo);
+    int* visitado = calloc(n, sizeof(int));
+
+    Vertice primeiro = NULL;
+    CtxPrimeiro cp = { &primeiro };
+    iterarVertices(grafo, &cp, pegarPrimeiro);
+    if (!primeiro) { 
+        free(visitado); 
+        return; 
+    }
+
+    visitado[getVerticeIndice(primeiro)] = 1;
+
+    for (int iter = 0; iter < n - 1; iter++) {
+        double menor_peso = DBL_MAX;
+        Aresta melhor = NULL;
+        int invertida = 0;
+        CtxPrim ctx = { visitado, &menor_peso, &melhor, &invertida };
+        iterarArestas(grafo, &ctx, avaliarArestaPrim);
+
+        if (!melhor) break;
+
+        // Marca o vértice não-visitado como visitado. Se a aresta foi usada invertida, o vértice novo é a origem.
+        int idx_novo = invertida ? getVerticeIndice(getArestaOrigem(melhor)) : getVerticeIndice(getArestaDestino(melhor));
+        visitado[idx_novo] = 1;
+
+        if (getArestaVm(melhor) < vl) {
+            setArestaVm(melhor, getArestaVm(melhor) * 1.5);
+            fprintf(fSvg, "\t<line x1=\"%lf\" y1=\"%lf\" x2=\"%lf\" y2=\"%lf\"" " stroke=\"red\" stroke-width=\"4\"/>\n",
+                getVerticeX(getArestaOrigem(melhor)), getVerticeY(getArestaOrigem(melhor)),
+                getVerticeX(getArestaDestino(melhor)), getVerticeY(getArestaDestino(melhor)));
+        }
+    }
+    free(visitado);
+}
+
+// p? — caminhos mínimos animados
+
+static void desenharPercurso(Vertice* cam, int tam, const char* cor, const char* id_path, FILE* fSvg) {
+    if (!cam || tam < 2) return;
+    fprintf(fSvg, "\t<path id=\"%s\" d=\"M%lf,%lf", id_path, getVerticeX(cam[0]), getVerticeY(cam[0]));
+    for (int i = 1; i < tam; i++)
+        fprintf(fSvg, " L%lf,%lf", getVerticeX(cam[i]), getVerticeY(cam[i]));
+    fprintf(fSvg, "\" stroke=\"%s\" stroke-width=\"3\" fill=\"none\"/>\n", cor);
+
+    fprintf(fSvg, "\t<circle r=\"6\" fill=\"%s\">\n" "\t  <animateMotion dur=\"4s\" repeatCount=\"indefinite\">\n"
+        "\t    <mpath xlink:href=\"#%s\"/>\n" "\t  </animateMotion>\n" "\t</circle>\n", cor, id_path);
+}
+
+static void desenharPlaca(double x, double y, const char* letra, FILE* fSvg) {
+    fprintf(fSvg, "\t<rect x=\"%lf\" y=\"%lf\" width=\"14\" height=\"14\"" " fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n", x-7, y-7);
+    fprintf(fSvg, "\t<text x=\"%lf\" y=\"%lf\" font-size=\"10\" text-anchor=\"middle\"" " dominant-baseline=\"middle\" font-weight=\"bold\">%s</text>\n", x, y, letra);
+}
+
+void comando_p(void* grafo, int reg1, int reg2, char* cc, char* cr, FILE* fTxt, FILE* fSvg) {
+    if (reg1 < 0 || reg1 >= MAX_REG || reg2 < 0 || reg2 >= MAX_REG) return;
+
+    Vertice origem  = registradores[reg1];
+    Vertice destino = registradores[reg2];
+
+    if (!origem || !destino) {
+        fprintf(fTxt, "p? R%d R%d: registrador invalido.\n", reg1, reg2);
+        return;
+    }
+
+    // Dijkstra por distância
+    ResultadoDijkstra rd = executarDijkstra(grafo, origem, DIJKSTRA_DISTANCIA);
+    int tam_d = 0;
+    Vertice* cam_d = reconstruirCaminho(rd, destino, &tam_d);
+
+    // Dijkstra por tempo 
+    ResultadoDijkstra rt = executarDijkstra(grafo, origem, DIJKSTRA_TEMPO);
+    int tam_t = 0;
+    Vertice* cam_t = reconstruirCaminho(rt, destino, &tam_t);
+
+    if (!cam_d) {
+        fprintf(fTxt, "p? R%d R%d: destino inacessivel.\n", reg1, reg2);
+    } else {
+        // TXT — mais curto
+        fprintf(fTxt, "p? R%d->R%d (mais curto, %.2lf m): ", reg1, reg2, getCusto(rd, destino));
+        for (int i = 0; i < tam_d; i++)
+            fprintf(fTxt, "%s%s", getVerticeId(cam_d[i]), i<tam_d-1?" -> ":"");
+        fprintf(fTxt, "\n");
+
+        // TXT — mais rápido
+        fprintf(fTxt, "p? R%d->R%d (mais rapido, %.2lf s): ", reg1, reg2, getCusto(rt, destino));
+        for (int i = 0; i < tam_t; i++)
+            fprintf(fTxt, "%s%s", getVerticeId(cam_t[i]), i<tam_t-1?" -> ":"");
+        fprintf(fTxt, "\n");
+
+        // SVG — percursos animados
+        static int id_seq = 0;
+        char id_d[32], id_t[32];
+        snprintf(id_d, sizeof(id_d), "path_d_%d", id_seq);
+        snprintf(id_t, sizeof(id_t), "path_t_%d", id_seq++);
+
+        desenharPercurso(cam_d, tam_d, cc, id_d, fSvg);
+        desenharPercurso(cam_t, tam_t, cr, id_t, fSvg);
+
+        // Placas I e F
+        desenharPlaca(getVerticeX(origem), getVerticeY(origem), "I", fSvg);
+        desenharPlaca(getVerticeX(destino), getVerticeY(destino), "F", fSvg);
+    }
+
+    free(cam_d);
+    free(cam_t);
+    destruirResultado(rd);
+    destruirResultado(rt);
+}

@@ -245,6 +245,18 @@ void iterarAdjacentes(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta
     }
 }
 
+// Percorre a lista global procurando arestas cujo DESTINO é v.
+// Isso simula o grafo transposto sem precisar criá-lo em memória.
+void iterarAdjacentesInverso(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta, void*)) {
+    if (!g || !v || !visitar) return;
+    aresta_t* a = ((grafo_t*)g)->arestas;
+    while (a) {
+        if (a->ativo && (Vertice)a->destino == v)
+            visitar((Aresta)a, contexto);
+        a = a->prox_global;
+    }
+}
+
 void iterarVertices(Grafo g, void* contexto, void (*visitar)(Vertice, void*)) {
     if (!g || !visitar) return;
     vertice_t* v = ((grafo_t*)g)->vertices;

@@ -136,10 +136,11 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
     while (fscanf(arq, "%15s", cmd) != EOF) {
 
         if (strcmp(cmd, "@o?") == 0) {
-            int reg; 
+            int reg_str[8]; 
             char cep[32], face_str[4]; 
             double num;
-            if (fscanf(arq, "%d %31s %3s %lf", &reg, cep, face_str, &num) != 4) continue;
+            if (fscanf(arq, "%7s %31s %3s %lf", reg_str, cep, face_str, &num) != 4) continue;
+            int reg = (reg_str[0]=='R'||reg_str[0]=='r') ? atoi(reg_str+1) : atoi(reg_str);
             if (reg >= 0 && reg < MAX_REG) {
                 registradores[reg] = verticeProximoEndereco(grafo, h_q, cep, face_str[0], num);
                 double ex, ey;
@@ -162,10 +163,11 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
             if (fscanf(arq, "%lf", &vl) != 1) continue;
             comando_exp(grafo, vl, fSvg);
 
-        } else if (strcmp(cmd, "p?") == 0) {
-            int reg1, reg2; 
-            char cc[32], cr[32];
-            if (fscanf(arq, "%d %d %31s %31s", &reg1, &reg2, cc, cr) != 4) continue;
+        } else if (strcmp(cmd, "p?") == 0) { 
+            char r1_str[8], r2_str[8], cc[32], cr[32];
+            if (fscanf(arq, "%7s %7s %31s %31s", r1_str, r2_str, cc, cr) != 4) continue;
+            int reg1 = (r1_str[0]=='R'||r1_str[0]=='r') ? atoi(r1_str+1) : atoi(r1_str);
+            int reg2 = (r2_str[0]=='R'||r2_str[0]=='r') ? atoi(r2_str+1) : atoi(r2_str);
             comando_p(grafo, reg1, reg2, cc, cr, fTxt, fSvg);
 
         } else {

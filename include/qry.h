@@ -40,9 +40,8 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
  * @details O registrador é um índice 0..10. A posição é calculada a partir do CEP, face e número, consultando as arestas adjacentes à quadra no grafo.
  * @param grafo Ponteiro para o grafo viário.
  * @param reg Índice do registrador (0..10).
- * @param cep CEP da quadra de referência.
- * @param face Face da quadra ('N','S','L','O').
- * @param num Número no logradouro.
+ * @param ex Coordenada X da posição.
+ * @param ey Coordenada Y da posição.
  * @param fTxt Arquivo de saída textual.
  * @param fSvg Arquivo SVG de saída.
  */

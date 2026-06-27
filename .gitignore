@@ -1,0 +1,16 @@
+# Pastas
+testes
+saida
+
+# Pastas de compilação
+build/
+
+# Executáveis
+ted
+
+# Arquivos de objeto e bibliotecas
+*.o
+
+# Arquivos temporários e de log
+*.log
+.vscode/

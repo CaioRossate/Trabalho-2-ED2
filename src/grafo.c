@@ -245,6 +245,49 @@ void iterarAdjacentes(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta
     }
 }
 
+int* getVizinhosAtivos(Grafo g, Vertice v, int* n_vizinhos) {
+    *n_vizinhos = 0;
+    if (!g || !v) return NULL;
+    // Conta primeiro
+    int cap = 0;
+    aresta_no_t* no = ((vertice_t*)v)->adj;
+    while (no) { 
+        if (no->aresta->ativo) cap++; 
+        no = no->prox; 
+    }
+    if (cap == 0) return NULL;
+    int* buf = malloc(sizeof(int) * cap);
+    no = ((vertice_t*)v)->adj;
+    while (no) {
+        if (no->aresta->ativo)
+            buf[(*n_vizinhos)++] = no->aresta->destino->indice;
+        no = no->prox;
+    }
+    return buf;
+}
+ 
+int* getVizinhosInversos(Grafo g, Vertice v, int* n_vizinhos) {
+    *n_vizinhos = 0;
+    if (!g || !v) return NULL;
+    grafo_t* gr = (grafo_t*)g;
+    // Conta arestas ativas cujo destino é v
+    int cap = 0;
+    aresta_t* a = gr->arestas;
+    while (a) { 
+        if (a->ativo && (Vertice)a->destino == v) cap++; 
+        a = a->prox_global; 
+    }
+    if (cap == 0) return NULL;
+    int* buf = malloc(sizeof(int) * cap);
+    a = gr->arestas;
+    while (a) {
+        if (a->ativo && (Vertice)a->destino == v)
+            buf[(*n_vizinhos)++] = a->origem->indice;
+        a = a->prox_global;
+    }
+    return buf;
+}
+
 // Percorre a lista global procurando arestas cujo DESTINO é v.
 // Isso simula o grafo transposto sem precisar criá-lo em memória.
 void iterarAdjacentesInverso(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta, void*)) {

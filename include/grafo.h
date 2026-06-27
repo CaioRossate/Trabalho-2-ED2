@@ -210,6 +210,17 @@ void habilitarTodasArestas(Grafo g);
 void iterarAdjacentes(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta aresta, void* contexto));
 
 /**
+ * @brief Itera sobre todas as arestas que CHEGAM em um vértice (grafo transposto).
+ * @details Usado pelo algoritmo de Kosaraju na segunda passagem de DFS.
+ * Percorre a lista global de arestas procurando aquelas cujo destino é v.
+ * @param g O grafo.
+ * @param v O vértice de destino.
+ * @param contexto Dado extra passado para a função de visita.
+ * @param visitar Função chamada para cada aresta chegando em v.
+ */
+void iterarAdjacentesInverso(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta aresta, void* contexto));
+
+/**
  * @brief Itera sobre todos os vértices do grafo.
  * @param g O grafo.
  * @param contexto Dado extra passado para a função de visita.

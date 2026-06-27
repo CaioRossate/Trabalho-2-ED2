@@ -72,6 +72,12 @@ int getNumVertices(Grafo g);
  */
 const char* getVerticeId(Vertice v);
 
+/** @brief Retorna o índice do vértice.
+ * @param v O vértice.
+ * @return Índice do vértice.
+ */
+int getVerticeIndice(Vertice v);
+
 /** @brief Retorna a coordenada X do vértice.
  * @param v O vértice.
  * @return Coordenada X do vértice.

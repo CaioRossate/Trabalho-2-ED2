@@ -46,7 +46,7 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
  * @param fTxt Arquivo de saída textual.
  * @param fSvg Arquivo SVG de saída.
  */
-void comando_o(void* grafo, int reg, char* cep, char face, double num, FILE* fTxt, FILE* fSvg);
+void comando_o(void* grafo, int reg, double ex, double ey, FILE* fTxt, FILE* fSvg);
 
 /**
  * @brief Atualiza a velocidade média das arestas dentro de uma região (Comando: mvm).

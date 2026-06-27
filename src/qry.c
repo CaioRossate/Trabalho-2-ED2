@@ -136,8 +136,7 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
     while (fscanf(arq, "%15s", cmd) != EOF) {
 
         if (strcmp(cmd, "@o?") == 0) {
-            int reg_str[8]; 
-            char cep[32], face_str[4]; 
+            char reg_str[8], cep[32], face_str[4]; 
             double num;
             if (fscanf(arq, "%7s %31s %3s %lf", reg_str, cep, face_str, &num) != 4) continue;
             int reg = (reg_str[0]=='R'||reg_str[0]=='r') ? atoi(reg_str+1) : atoi(reg_str);

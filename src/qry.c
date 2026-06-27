@@ -296,11 +296,6 @@ typedef struct {
     int n, cap; 
 } CtxVizInv;
 
-static void coletarVizinhoInverso(Aresta a, void* ctx) {
-    CtxVizInv* c = (CtxVizInv*)ctx;
-    if (c->n < c->cap) c->buf[c->n++] = getVerticeIndice(getArestaOrigem(a));
-}
-
 // DFS iterativa — 2ª passagem no transposto: marca componentes
 static void dfs2(CtxKosaraju* ctx, int inicio, int comp_id) {
     int* pilha_local = malloc(sizeof(int) * ctx->n);

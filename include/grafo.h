@@ -199,6 +199,25 @@ void habilitarTodasArestas(Grafo g);
 
 // Iteração sobre adjacências
 
+/**
+ * @brief Retorna array de índices dos vértices adjacentes ativos a v.
+ * @details Aloca dinamicamente.
+ * @param g O grafo.
+ * @param v O vértice de origem.
+ * @param n_vizinhos Saída: número de vizinhos encontrados.
+ * @return Array de índices inteiros, ou NULL se não houver vizinhos.
+ */
+int* getVizinhosAtivos(Grafo g, Vertice v, int* n_vizinhos);
+
+/**
+ * @brief Retorna array de índices dos vértices que chegam em v (transposto).
+ * @details Aloca dinamicamente.
+ * @param g O grafo.
+ * @param v O vértice de destino.
+ * @param n_vizinhos Saída: número de vizinhos encontrados.
+ * @return Array de índices inteiros, ou NULL se não houver vizinhos.
+ */
+int* getVizinhosInversos(Grafo g, Vertice v, int* n_vizinhos);
 
 /**
  * @brief Itera sobre todas as arestas que saem de um vértice.

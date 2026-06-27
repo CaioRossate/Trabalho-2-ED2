@@ -11,11 +11,12 @@
 
 #define MAX_REG 11
 
-// Registradores geográficos: vértice mais próximo ao endereço
+// Registradores geográficos: vértice mais próximo ao endereço 
 static Vertice registradores[MAX_REG];
 
-// utility
+// Utilitários
 
+// Distância euclidiana entre dois pontos
 static double distEuclid(double x1, double y1, double x2, double y2) {
     double dx = x2-x1, dy = y2-y1;
     return sqrt(dx*dx + dy*dy);
@@ -24,8 +25,9 @@ static double distEuclid(double x1, double y1, double x2, double y2) {
 // Calcula coordenada de um endereço cep/face/num usando o hash de quadras
 static void coordEndereco(Hash h_q, char* cep, char face, double num, double* ex, double* ey) {
     void* qbuf = malloc(getQuadraSize());
-    *ex = 0.0; *ey = 0.0;
-    if (!buscarHash(h_q, cep, qbuf)) {
+    *ex = 0.0; 
+    *ey = 0.0;
+    if (!buscarHash(h_q, cep, qbuf)) { 
         free(qbuf); 
         return; 
     }
@@ -34,14 +36,19 @@ static void coordEndereco(Hash h_q, char* cep, char face, double num, double* ex
     double w = getQuadraW(qbuf), h = getQuadraH(qbuf);
 
     if (face == 'N') { 
-        *ex = x + (num/100.0)*w; *ey = y;
-    } else if (face == 'S') { 
-        *ex = x + (num/100.0)*w; *ey = y + h;
-    } else if (face == 'L') { 
-        *ex = x + w; *ey = y + (num/100.0)*h;
-    } else if (face == 'O') { 
+        *ex = x + (num/100.0)*w; 
+        *ey = y;     }
+    else if (face == 'S') { 
+        *ex = x + (num/100.0)*w; 
+        *ey = y + h; 
+    }
+    else if (face == 'L') { 
+        *ex = x + w;
+        *ey = y + (num/100.0)*h; 
+    }
+    else if (face == 'O') { 
         *ex = x; 
-        *ey = y + (num/100.0)*h;
+        *ey = y + (num/100.0)*h; 
     }
     free(qbuf);
 }
@@ -56,16 +63,17 @@ typedef struct {
 
 static void verificarArestaProx(Aresta a, void* ctx) {
     CtxProximo* c = (CtxProximo*)ctx;
-    // Só considera arestas adjacentes à quadra do endereço 
-    if (strcmp(getArestaLdir(a), c->cep) != 0 && strcmp(getArestaLesq(a), c->cep) != 0) return;
+    // Só considera arestas adjacentes à quadra do endereço
+    if (strcmp(getArestaLdir(a), c->cep) != 0 &&
+        strcmp(getArestaLesq(a), c->cep) != 0) return;
 
     Vertice vo = getArestaOrigem(a);
     Vertice vd = getArestaDestino(a);
     double do_ = distEuclid(c->px, c->py, getVerticeX(vo), getVerticeY(vo));
-    double dd  = distEuclid(c->px, c->py, getVerticeX(vd), getVerticeY(vd));
-    if (do_ < c->menor) {
+    double dd = distEuclid(c->px, c->py, getVerticeX(vd), getVerticeY(vd));
+    if (do_ < c->menor) { 
         c->menor = do_; 
-        c->mais_proximo = vo;
+        c->mais_proximo = vo; 
     }
     if (dd < c->menor) { 
         c->menor = dd;  
@@ -88,14 +96,13 @@ static Vertice verticeProximoEndereco(Grafo grafo, Hash h_q, char* cep, char fac
     coordEndereco(h_q, cep, face, num, &ex, &ey);
 
     CtxProximo ctx;
-    strncpy(ctx.cep, cep, 31); 
-    ctx.cep[31] = '\0';
+    strncpy(ctx.cep, cep, 31); ctx.cep[31] = '\0';
     ctx.px = ex; 
     ctx.py = ey;
     ctx.menor = DBL_MAX; 
     ctx.mais_proximo = NULL;
 
-    // Tenta primeiro pelas arestas que têm o CEP como ldir ou lesq 
+    // Tenta primeiro pelas arestas que têm o CEP como ldir ou lesq
     iterarArestas(grafo, &ctx, verificarArestaProx);
 
     // Se não encontrou nenhuma aresta com o CEP, usa busca global
@@ -105,7 +112,7 @@ static Vertice verticeProximoEndereco(Grafo grafo, Hash h_q, char* cep, char fac
     return ctx.mais_proximo;
 }
 
-//Pré-leitura: sem rq no T2, retorna 0
+// Pré-leitura: sem rq no T2, retorna 0
 
 int coletarCepsRemovidos(const char* path_qry, char ceps_out[][20], int max_ceps) {
     (void)path_qry; 
@@ -114,12 +121,12 @@ int coletarCepsRemovidos(const char* path_qry, char ceps_out[][20], int max_ceps
     return 0;
 }
 
-// Qry
+// Processa Qry
 
 void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt, FILE* fSvg) {
     FILE* arq = fopen(path_qry, "r");
-    if (!arq) {
-        printf("Erro ao abrir .qry: %s\n", path_qry);
+    if (!arq) { 
+        printf("Erro ao abrir .qry: %s\n", path_qry); 
         return; 
     }
 
@@ -129,7 +136,8 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
     while (fscanf(arq, "%15s", cmd) != EOF) {
 
         if (strcmp(cmd, "@o?") == 0) {
-            int reg; char cep[32], face_str[4]; 
+            int reg; 
+            char cep[32], face_str[4]; 
             double num;
             if (fscanf(arq, "%d %31s %3s %lf", &reg, cep, face_str, &num) != 4) continue;
             if (reg >= 0 && reg < MAX_REG) {
@@ -155,7 +163,8 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
             comando_exp(grafo, vl, fSvg);
 
         } else if (strcmp(cmd, "p?") == 0) {
-            int reg1, reg2; char cc[32], cr[32];
+            int reg1, reg2; 
+            char cc[32], cr[32];
             if (fscanf(arq, "%d %d %31s %31s", &reg1, &reg2, cc, cr) != 4) continue;
             comando_p(grafo, reg1, reg2, cc, cr, fTxt, fSvg);
 
@@ -167,7 +176,7 @@ void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt
     fclose(arq);
 }
 
-// @o? — registrador geográfico   
+// @o? — registrador geográfico
 
 void comando_o(void* grafo, int reg, double ex, double ey, FILE* fTxt, FILE* fSvg) {
     (void)grafo;
@@ -210,80 +219,121 @@ void comando_mvm(void* grafo, double v, double x, double y, double w, double h) 
     iterarArestas(grafo, &ctx, atualizarVmRegiao);
 }
 
-// regs — componentes conexos por Union-Find     
+// regs — componentes FORTEMENTE conexos (Kosaraju)
 
-// Union-Find global (alocado por comando_regs, liberado ao final)
-static int* uf_pai = NULL;
-static int  uf_n   = 0;
-
-static int uf_find(int x) {
-    while (uf_pai[x] != x) {
-        uf_pai[x] = uf_pai[uf_pai[x]]; // path compression
-        x = uf_pai[x];
-    }
-    return x;
-}
-
-static void uf_unir(int a, int b) {
-    a = uf_find(a); b = uf_find(b);
-    if (a != b) uf_pai[b] = a;
-}
-
+// Pilha simples para a primeira DFS
 typedef struct { 
-    double vl; 
-} CtxUF;
+    int* dados; 
+    int topo, cap; 
+} Pilha;
 
-static void unirArestaLenta(Aresta a, void* ctx) {
-    CtxUF* c = (CtxUF*)ctx;
-    if (getArestaVm(a) < c->vl) uf_unir(getVerticeIndice(getArestaOrigem(a)), getVerticeIndice(getArestaDestino(a)));
+static Pilha* criarPilha(int cap) {
+    Pilha* p = malloc(sizeof(Pilha));
+    p->dados = malloc(sizeof(int) * cap);
+    p->topo = 0; p->cap = cap;
+    return p;
+}
+static void destruirPilha(Pilha* p) { 
+    if (p) { 
+        free(p->dados); 
+        free(p); 
+    } 
+}
+static void empilhar(Pilha* p, int v) { 
+    if (p->topo < p->cap) p->dados[p->topo++] = v; 
+}
+static int desempilhar(Pilha* p) { 
+    return p->topo > 0 ? p->dados[--p->topo] : -1; 
 }
 
-/* Bounding box por componente */
+// Struct compartilhada pelas duas DFS
 typedef struct {
-    int* raizes;
-    int n_comp;
-    double* mn_x; 
-    double* mn_y;
-    double* mx_x; 
-    double* mx_y;
-} CtxBBox;
+    Grafo grafo;
+    int* visitado;
+    int* componente;
+    Pilha* pilha;
+    Vertice* idx_para_v;
+    int n;
+} CtxKosaraju;
 
-static void acumularBBox(Vertice v, void* ctx) {
-    CtxBBox* c = (CtxBBox*)ctx;
-    int raiz = uf_find(getVerticeIndice(v));
-    int slot = -1;
-    for (int i = 0; i < c->n_comp; i++)
-        if (c->raizes[i] == raiz) { 
-            slot = i; 
-            break; 
+// DFS iterativa — 1ª passagem: empilha por ordem de término
+static void dfs1(CtxKosaraju* ctx, int inicio) {
+    int* trabalho = malloc(sizeof(int) * ctx->n * 2);
+    int topo = 0;
+    trabalho[topo++] = inicio;
+    trabalho[topo++] = 0;
+
+    while (topo > 0) {
+        int estado = trabalho[--topo];
+        int idx = trabalho[--topo];
+
+        if (estado == 1) { 
+            empilhar(ctx->pilha, idx); 
+            continue; 
         }
-    if (slot < 0) return;
-    double x = getVerticeX(v), y = getVerticeY(v);
-    if (x < c->mn_x[slot]) c->mn_x[slot] = x;
-    if (y < c->mn_y[slot]) c->mn_y[slot] = y;
-    if (x > c->mx_x[slot]) c->mx_x[slot] = x;
-    if (y > c->mx_y[slot]) c->mx_y[slot] = y;
+        if (ctx->visitado[idx]) continue;
+        ctx->visitado[idx] = 1;
+
+        trabalho[topo++] = idx;
+        trabalho[topo++] = 1;
+
+        int n_viz = 0;
+        int* viz = getVizinhosAtivos(ctx->grafo, ctx->idx_para_v[idx], &n_viz);
+        for (int i = 0; i < n_viz; i++) {
+            if (!ctx->visitado[viz[i]]) {
+                trabalho[topo++] = viz[i];
+                trabalho[topo++] = 0;
+            }
+        }
+        free(viz);
+    }
+    free(trabalho);
 }
 
-static void gerarCorAleatoria(char* buffer) {
-    sprintf(buffer, "#%06X", rand() % 0xFFFFFF);
-}
-
-// Coleta raízes únicas dos componentes 
+// Coleta índices de vizinhos no grafo transposto
 typedef struct { 
-    int* raizes; 
-    int n; 
-    int cap; 
-} CtxRaizes;
+    int* buf; 
+    int n, cap; 
+} CtxVizInv;
 
-static void coletarRaiz(Vertice v, void* ctx) {
-    CtxRaizes* c = (CtxRaizes*)ctx;
-    int r = uf_find(getVerticeIndice(v));
-    for (int i = 0; i < c->n; i++) if (c->raizes[i] == r) return;
-    if (c->n < c->cap) c->raizes[c->n++] = r;
+static void coletarVizinhoInverso(Aresta a, void* ctx) {
+    CtxVizInv* c = (CtxVizInv*)ctx;
+    if (c->n < c->cap) c->buf[c->n++] = getVerticeIndice(getArestaOrigem(a));
 }
 
-// Desabilita arestas com vm >= vl (as "rápidas" ficam fora do cálculo de componentes)
+// DFS iterativa — 2ª passagem no transposto: marca componentes
+static void dfs2(CtxKosaraju* ctx, int inicio, int comp_id) {
+    int* pilha_local = malloc(sizeof(int) * ctx->n);
+    int topo = 0;
+    pilha_local[topo++] = inicio;
+
+    while (topo > 0) {
+        int idx = pilha_local[--topo];
+        if (ctx->componente[idx] >= 0) continue;
+        ctx->componente[idx] = comp_id;
+
+        int n_viz = 0;
+        int* viz = getVizinhosInversos(ctx->grafo, ctx->idx_para_v[idx], &n_viz);
+        for (int i = 0; i < n_viz; i++)
+            if (ctx->componente[viz[i]] < 0)
+                pilha_local[topo++] = viz[i];
+        free(viz);
+    }
+    free(pilha_local);
+}
+
+// Struct para montar mapa índice -> Vertice
+typedef struct { 
+    Vertice* mapa; 
+    int pos; 
+} CtxMapaV;
+
+static void mapearV(Vertice v, void* ctx) {
+    CtxMapaV* c = (CtxMapaV*)ctx;
+    c->mapa[c->pos++] = v;
+}
+
+// Desabilita arestas rápidas (vm >= vl)
 typedef struct { 
     double vl; 
 } CtxDesabilitar;
@@ -293,44 +343,62 @@ static void desabilitarRapidas(Aresta a, void* ctx) {
     if (getArestaVm(a) >= c->vl) desabilitarAresta(a);
 }
 
+static void gerarCorAleatoria(char* buffer) {
+    sprintf(buffer, "#%06X", rand() % 0xFFFFFF);
+}
+
 void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
     int n = getNumVertices(grafo);
-    uf_n = n;
-    uf_pai = malloc(sizeof(int) * n);
-    for (int i = 0; i < n; i++) uf_pai[i] = i;
 
-    // 1. Garante estado limpo e desabilita arestas rápidas (vm >= vl).
-    // Após isso, iterarArestas só enxerga as lentas.
+    // 1. Desabilita arestas rápidas (vm >= vl)
     habilitarTodasArestas(grafo);
     CtxDesabilitar ctx_des = { vl };
     iterarArestas(grafo, &ctx_des, desabilitarRapidas);
 
-    // 2. Calcula componentes conexos apenas sobre as arestas lentas
-    CtxUF ctx_uf = { vl };
-    iterarArestas(grafo, &ctx_uf, unirArestaLenta);
+    // 2. Monta mapa índice -> Vertice
+    Vertice* idx_v = malloc(sizeof(Vertice) * n);
+    CtxMapaV cm = { idx_v, 0 };
+    iterarVertices(grafo, &cm, mapearV);
 
-    // 3. Reabilita todas as arestas — estado do grafo restaurado
+    // 3. Kosaraju — 1ª passagem
+    int* visitado = calloc(n, sizeof(int));
+    Pilha* pilha = criarPilha(n);
+
+    CtxKosaraju ctx_k = { grafo, visitado, NULL, pilha, idx_v, n };
+    for (int i = 0; i < n; i++)
+        if (!visitado[i]) dfs1(&ctx_k, i);
+
+    // 4. Kosaraju — 2ª passagem no transposto
+    int* componente = malloc(sizeof(int) * n);
+    for (int i = 0; i < n; i++) componente[i] = -1;
+    ctx_k.componente = componente;
+
+    int n_comp = 0, idx;
+    while ((idx = desempilhar(pilha)) != -1)
+        if (componente[idx] < 0) dfs2(&ctx_k, idx, n_comp++);
+
+    // 5. Reabilita todas as arestas
     habilitarTodasArestas(grafo);
 
-    // 4. Coleta raízes únicas dos componentes 
-    int* raizes = malloc(sizeof(int) * n);
-    CtxRaizes ctx_r = { raizes, 0, n };
-    iterarVertices(grafo, &ctx_r, coletarRaiz);
-    int n_comp = ctx_r.n;
+    fprintf(fTxt, "regs %.2lf: %d componente(s) fortemente conexo(s)\n", vl, n_comp);
 
-    fprintf(fTxt, "regs %.2lf: %d componente(s) conexo(s)\n", vl, n_comp);
-
-    // 5. Bounding boxes por componente
+    // 6. Bounding boxes por componente
     double* mn_x = malloc(sizeof(double) * n_comp);
     double* mn_y = malloc(sizeof(double) * n_comp);
     double* mx_x = malloc(sizeof(double) * n_comp);
     double* mx_y = malloc(sizeof(double) * n_comp);
     for (int i = 0; i < n_comp; i++) {
-        mn_x[i] =  DBL_MAX; mn_y[i] =  DBL_MAX;
+        mn_x[i] = DBL_MAX; mn_y[i] = DBL_MAX;
         mx_x[i] = -DBL_MAX; mx_y[i] = -DBL_MAX;
     }
-    CtxBBox ctx_bb = { raizes, n_comp, mn_x, mn_y, mx_x, mx_y };
-    iterarVertices(grafo, &ctx_bb, acumularBBox);
+    for (int i = 0; i < n; i++) {
+        int c = componente[i];
+        double x = getVerticeX(idx_v[i]), y = getVerticeY(idx_v[i]);
+        if (x < mn_x[c]) mn_x[c] = x;
+        if (y < mn_y[c]) mn_y[c] = y;
+        if (x > mx_x[c]) mx_x[c] = x;
+        if (y > mx_y[c]) mx_y[c] = y;
+    }
 
     double margem = 5.0;
     for (int i = 0; i < n_comp; i++) {
@@ -338,20 +406,20 @@ void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
         gerarCorAleatoria(cor);
         fprintf(fSvg, "\t<rect x=\"%lf\" y=\"%lf\" width=\"%lf\" height=\"%lf\""
             " fill=\"%s\" fill-opacity=\"0.5\" stroke=\"gray\" stroke-width=\"1\"/>\n",
-            mn_x[i]-margem, mn_y[i]-margem, (mx_x[i]-mn_x[i])+2*margem, (mx_y[i]-mn_y[i])+2*margem,cor);
+            mn_x[i]-margem, mn_y[i]-margem, (mx_x[i]-mn_x[i])+2*margem, (mx_y[i]-mn_y[i])+2*margem, cor);
     }
 
     free(mn_x); 
     free(mn_y); 
     free(mx_x); 
     free(mx_y);
-    free(raizes); 
-    free(uf_pai); 
-    uf_pai = NULL; 
-    uf_n = 0;
+    free(componente); 
+    free(visitado); 
+    free(idx_v);
+    destruirPilha(pilha);
 }
 
-// exp — AGM (Prim) + aumenta vm 50% nas arestas lentas 
+// exp — AGM (Prim) + aumenta vm 50% nas arestas lentas
 
 typedef struct {
     int* visitado;
@@ -379,7 +447,7 @@ static void avaliarArestaPrim(Aresta a, void* ctx) {
     }
 }
 
-typedef struct { 
+typedef struct {
     Vertice* primeiro; 
 } CtxPrimeiro;
 
@@ -395,10 +463,7 @@ void comando_exp(void* grafo, double vl, FILE* fSvg) {
     Vertice primeiro = NULL;
     CtxPrimeiro cp = { &primeiro };
     iterarVertices(grafo, &cp, pegarPrimeiro);
-    if (!primeiro) { 
-        free(visitado); 
-        return; 
-    }
+    if (!primeiro) { free(visitado); return; }
 
     visitado[getVerticeIndice(primeiro)] = 1;
 
@@ -434,19 +499,21 @@ static void desenharPercurso(Vertice* cam, int tam, const char* cor, const char*
         fprintf(fSvg, " L%lf,%lf", getVerticeX(cam[i]), getVerticeY(cam[i]));
     fprintf(fSvg, "\" stroke=\"%s\" stroke-width=\"3\" fill=\"none\"/>\n", cor);
 
-    fprintf(fSvg, "\t<circle r=\"6\" fill=\"%s\">\n" "\t  <animateMotion dur=\"4s\" repeatCount=\"indefinite\">\n"
-        "\t    <mpath xlink:href=\"#%s\"/>\n" "\t  </animateMotion>\n" "\t</circle>\n", cor, id_path);
+    fprintf(fSvg, "\t<text font-size=\"16\">\n" "\t <animateMotion dur=\"4s\" repeatCount=\"indefinite\" rotate=\"auto\">\n"
+    "\t <mpath xlink:href=\"#%s\"/>\n" "\t </animateMotion>\n" "\t 🚗\n" "\t</text>\n", id_path);
 }
 
 static void desenharPlaca(double x, double y, const char* letra, FILE* fSvg) {
-    fprintf(fSvg, "\t<rect x=\"%lf\" y=\"%lf\" width=\"14\" height=\"14\"" " fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n", x-7, y-7);
-    fprintf(fSvg, "\t<text x=\"%lf\" y=\"%lf\" font-size=\"10\" text-anchor=\"middle\"" " dominant-baseline=\"middle\" font-weight=\"bold\">%s</text>\n", x, y, letra);
+    fprintf(fSvg, "\t<rect x=\"%lf\" y=\"%lf\" width=\"14\" height=\"14\""
+        " fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n", x-7, y-7);
+    fprintf(fSvg, "\t<text x=\"%lf\" y=\"%lf\" font-size=\"10\" text-anchor=\"middle\""
+        " dominant-baseline=\"middle\" font-weight=\"bold\">%s</text>\n", x, y, letra);
 }
 
 void comando_p(void* grafo, int reg1, int reg2, char* cc, char* cr, FILE* fTxt, FILE* fSvg) {
     if (reg1 < 0 || reg1 >= MAX_REG || reg2 < 0 || reg2 >= MAX_REG) return;
 
-    Vertice origem  = registradores[reg1];
+    Vertice origem = registradores[reg1];
     Vertice destino = registradores[reg2];
 
     if (!origem || !destino) {
@@ -459,7 +526,7 @@ void comando_p(void* grafo, int reg1, int reg2, char* cc, char* cr, FILE* fTxt, 
     int tam_d = 0;
     Vertice* cam_d = reconstruirCaminho(rd, destino, &tam_d);
 
-    // Dijkstra por tempo 
+    // Dijkstra por tempo
     ResultadoDijkstra rt = executarDijkstra(grafo, origem, DIJKSTRA_TEMPO);
     int tam_t = 0;
     Vertice* cam_t = reconstruirCaminho(rt, destino, &tam_t);
@@ -489,7 +556,7 @@ void comando_p(void* grafo, int reg1, int reg2, char* cc, char* cr, FILE* fTxt, 
         desenharPercurso(cam_t, tam_t, cr, id_t, fSvg);
 
         // Placas I e F
-        desenharPlaca(getVerticeX(origem), getVerticeY(origem), "I", fSvg);
+        desenharPlaca(getVerticeX(origem),  getVerticeY(origem),  "I", fSvg);
         desenharPlaca(getVerticeX(destino), getVerticeY(destino), "F", fSvg);
     }
 

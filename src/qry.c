@@ -495,7 +495,7 @@ static void desenharPercurso(Vertice* cam, int tam, const char* cor, const char*
         fprintf(fSvg, " L%lf,%lf", getVerticeX(cam[i]), getVerticeY(cam[i]));
     fprintf(fSvg, "\" stroke=\"%s\" stroke-width=\"3\" fill=\"none\"/>\n", cor);
 
-    fprintf(fSvg, "\t<text font-size=\"16\">\n" "\t <animateMotion dur=\"4s\" repeatCount=\"indefinite\" rotate=\"auto\">\n"
+    fprintf(fSvg, "\t<text font-size=\"16\">\n" "\t <animateMotion dur=\"4s\" repeatCount=\"indefinite\" rotate=\"auto-reverse\">\n"
     "\t <mpath xlink:href=\"#%s\"/>\n" "\t </animateMotion>\n" "\t 🚗\n" "\t</text>\n", id_path);
 }
 
@@ -534,13 +534,19 @@ void comando_p(void* grafo, int reg1, int reg2, char* cc, char* cr, FILE* fTxt, 
         fprintf(fTxt, "p? R%d->R%d (mais curto, %.2lf m): ", reg1, reg2, getCusto(rd, destino));
         for (int i = 0; i < tam_d; i++)
             fprintf(fTxt, "%s%s", getVerticeId(cam_d[i]), i<tam_d-1?" -> ":"");
-        fprintf(fTxt, "\n");
+        fprintf(fTxt, "\n\n");
+        fprintf(fTxt, " Origem : %s\n", getVerticeId(cam_d[0]));
+        fprintf(fTxt, " Destino: %s\n", getVerticeId(cam_d[tam_d-1]));
+        fprintf(fTxt, " Percurso: %d segmentos\n\n", tam_d - 1);
 
         // TXT — mais rápido
         fprintf(fTxt, "p? R%d->R%d (mais rapido, %.2lf s): ", reg1, reg2, getCusto(rt, destino));
         for (int i = 0; i < tam_t; i++)
             fprintf(fTxt, "%s%s", getVerticeId(cam_t[i]), i<tam_t-1?" -> ":"");
-        fprintf(fTxt, "\n");
+        fprintf(fTxt, "\n\n");
+        fprintf(fTxt, " Origem : %s\n", getVerticeId(cam_t[0]));
+        fprintf(fTxt, " Destino: %s\n", getVerticeId(cam_t[tam_t-1]));
+        fprintf(fTxt, " Percurso: %d segmentos\n\n", tam_t - 1);
 
         // SVG — percursos animados
         static int id_seq = 0;

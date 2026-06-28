@@ -258,6 +258,16 @@ void iterarArestas(Grafo g, void* contexto, void (*visitar)(Aresta a, void* cont
 
 // Desenho SVG
 
+/**
+ * @brief Calcula o bounding box de todos os vértices do grafo.
+ * @details Usado pelo main para expandir o viewBox do SVG além das quadras.
+ * @param g O grafo.
+ * @param vx Saída: X mínimo com margem.
+ * @param vy Saída: Y mínimo com margem.
+ * @param vw Saída: largura total com margem.
+ * @param vh Saída: altura total com margem.
+ */
+void calcularBBoxGrafo(Grafo g, double* vx, double* vy, double* vw, double* vh);
 
 /**
  * @brief Desenha todos os vértices e arestas do grafo no SVG.

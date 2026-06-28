@@ -338,6 +338,28 @@ static void desenharAresta(Aresta a, void* ctx) {
     fprintf(svg, "\t<line x1=\"%lf\" y1=\"%lf\" x2=\"%lf\" y2=\"%lf\""" stroke=\"gray\" stroke-width=\"1\""" marker-end=\"url(#seta)\"/>\n", x1, y1, x2, y2);
 }
 
+void calcularBBoxGrafo(Grafo g, double* vx, double* vy, double* vw, double* vh) {
+    if (!g) { 
+        *vx = *vy = *vw = *vh = 0; 
+        return; 
+    }
+    double min_x = 1e18, min_y = 1e18;
+    double max_x = -1e18, max_y = -1e18;
+    vertice_t* v = ((grafo_t*)g)->vertices;
+    while (v) {
+        if (v->x < min_x) min_x = v->x;
+        if (v->y < min_y) min_y = v->y;
+        if (v->x > max_x) max_x = v->x;
+        if (v->y > max_y) max_y = v->y;
+        v = v->prox;
+    }
+    double margem = 20.0;
+    *vx = min_x - margem;
+    *vy = min_y - margem;
+    *vw = (max_x - min_x) + 2 * margem;
+    *vh = (max_y - min_y) + 2 * margem;
+}
+
 void desenharGrafoSVG(Grafo g, FILE* fSvg) {
     if (!g || !fSvg) return;
 

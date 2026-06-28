@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     if (paths[QUERY]) {
         char* pathQry = concatenarCaminho(paths[ENTRADA], paths[QUERY]);
 
-        // Monta nomes de saída 
+        // Monta nomes de saída
         char geoBase[128], qryBase[128];
         strncpy(geoBase, paths[GEO], sizeof(geoBase)-1); 
         geoBase[sizeof(geoBase)-1] = '\0';
@@ -88,11 +88,26 @@ int main(int argc, char* argv[]) {
             char ceps_removidos[1][20];
             int  n_rem = coletarCepsRemovidos(pathQry, ceps_removidos, 1);
 
-            // Abre SVG com viewBox calculado
+            // Calcula viewBox a partir das quadras
             double vx, vy, vw, vh;
             calcularBBoxCidade(hashQuadras, &vx, &vy, &vw, &vh);
+
+            // Expande o viewBox para incluir os vértices do grafo
+            if (grafo) {
+                double gx, gy, gw, gh;
+                calcularBBoxGrafo(grafo, &gx, &gy, &gw, &gh);
+                // Toma o menor x/y e maior x+w/y+h entre quadras e grafo
+                double min_x = vx < gx ? vx : gx;
+                double min_y = vy < gy ? vy : gy;
+                double max_x = (vx+vw) > (gx+gw) ? (vx+vw) : (gx+gw);
+                double max_y = (vy+vh) > (gy+gh) ? (vy+vh) : (gy+gh);
+                vx = min_x; vy = min_y;
+                vw = max_x - min_x;
+                vh = max_y - min_y;
+            }
+
             fprintf(fSvg, "<svg xmlns=\"http://www.w3.org/2000/svg\"" " xmlns:xlink=\"http://www.w3.org/1999/xlink\""
-                " viewBox=\"%lf %lf %lf %lf\"" " width=\"100%%\" height=\"100%%\">\n",vx, vy, vw, vh);
+                " viewBox=\"%lf %lf %lf %lf\"" " width=\"100%%\" height=\"100%%\">\n", vx, vy, vw, vh);
 
             // Desenha quadras
             gerarCidadeSVG(hashQuadras, fSvg, ceps_removidos, n_rem);

@@ -210,8 +210,11 @@ static void atualizarVmRegiao(Aresta a, void* ctx) {
     double oy = getVerticeY(getArestaOrigem(a));
     double dx = getVerticeX(getArestaDestino(a));
     double dy = getVerticeY(getArestaDestino(a));
-    if (ox >= c->x && ox <= c->x+c->w && oy >= c->y && oy <= c->y+c->h &&
-        dx >= c->x && dx <= c->x+c->w && dy >= c->y && dy <= c->y+c->h)
+ 
+    // Atualiza se o ponto MÉDIO da aresta estiver dentro da região
+    double mx = (ox + dx) / 2.0;
+    double my = (oy + dy) / 2.0;
+    if (mx >= c->x && mx <= c->x + c->w && my >= c->y && my <= c->y + c->h)
         setArestaVm(a, c->v);
 }
 
@@ -227,7 +230,7 @@ typedef struct {
     int* dados; 
     int topo, cap; 
 } Pilha;
-
+ 
 static Pilha* criarPilha(int cap) {
     Pilha* p = malloc(sizeof(Pilha));
     p->dados = malloc(sizeof(int) * cap);
@@ -246,8 +249,8 @@ static void empilhar(Pilha* p, int v) {
 static int desempilhar(Pilha* p) { 
     return p->topo > 0 ? p->dados[--p->topo] : -1; 
 }
-
-// Struct compartilhada pelas duas DFS
+ 
+// Contexto compartilhado pelas duas DFS
 typedef struct {
     Grafo grafo;
     int* visitado;
@@ -256,28 +259,28 @@ typedef struct {
     Vertice* idx_para_v;
     int n;
 } CtxKosaraju;
-
+ 
 // DFS iterativa — 1ª passagem: empilha por ordem de término
 static void dfs1(CtxKosaraju* ctx, int inicio) {
     int* trabalho = malloc(sizeof(int) * ctx->n * 2);
     int topo = 0;
     trabalho[topo++] = inicio;
     trabalho[topo++] = 0;
-
+ 
     while (topo > 0) {
         int estado = trabalho[--topo];
         int idx = trabalho[--topo];
-
+ 
         if (estado == 1) { 
             empilhar(ctx->pilha, idx); 
             continue; 
         }
         if (ctx->visitado[idx]) continue;
         ctx->visitado[idx] = 1;
-
+ 
         trabalho[topo++] = idx;
         trabalho[topo++] = 1;
-
+ 
         int n_viz = 0;
         int* viz = getVizinhosAtivos(ctx->grafo, ctx->idx_para_v[idx], &n_viz);
         for (int i = 0; i < n_viz; i++) {
@@ -290,24 +293,18 @@ static void dfs1(CtxKosaraju* ctx, int inicio) {
     }
     free(trabalho);
 }
-
-// Coleta índices de vizinhos no grafo transposto
-typedef struct { 
-    int* buf; 
-    int n, cap; 
-} CtxVizInv;
-
+ 
 // DFS iterativa — 2ª passagem no transposto: marca componentes
 static void dfs2(CtxKosaraju* ctx, int inicio, int comp_id) {
     int* pilha_local = malloc(sizeof(int) * ctx->n);
     int topo = 0;
     pilha_local[topo++] = inicio;
-
+ 
     while (topo > 0) {
         int idx = pilha_local[--topo];
         if (ctx->componente[idx] >= 0) continue;
         ctx->componente[idx] = comp_id;
-
+ 
         int n_viz = 0;
         int* viz = getVizinhosInversos(ctx->grafo, ctx->idx_para_v[idx], &n_viz);
         for (int i = 0; i < n_viz; i++)
@@ -317,67 +314,64 @@ static void dfs2(CtxKosaraju* ctx, int inicio, int comp_id) {
     }
     free(pilha_local);
 }
-
-// Struct para montar mapa índice -> Vertice
+ 
+// Contexto para montar mapa índice -> Vertice
 typedef struct { 
     Vertice* mapa; 
     int pos; 
 } CtxMapaV;
-
+    
 static void mapearV(Vertice v, void* ctx) {
     CtxMapaV* c = (CtxMapaV*)ctx;
     c->mapa[c->pos++] = v;
 }
-
+ 
 // Desabilita arestas rápidas (vm >= vl)
-typedef struct { 
-    double vl; 
-} CtxDesabilitar;
-
+typedef struct { double vl; } CtxDesabilitar;
 static void desabilitarRapidas(Aresta a, void* ctx) {
     CtxDesabilitar* c = (CtxDesabilitar*)ctx;
     if (getArestaVm(a) >= c->vl) desabilitarAresta(a);
 }
-
+ 
 static void gerarCorAleatoria(char* buffer) {
     sprintf(buffer, "#%06X", rand() % 0xFFFFFF);
 }
-
+ 
 void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
     int n = getNumVertices(grafo);
-
+ 
     // 1. Desabilita arestas rápidas (vm >= vl)
     habilitarTodasArestas(grafo);
     CtxDesabilitar ctx_des = { vl };
     iterarArestas(grafo, &ctx_des, desabilitarRapidas);
-
+ 
     // 2. Monta mapa índice -> Vertice
     Vertice* idx_v = malloc(sizeof(Vertice) * n);
     CtxMapaV cm = { idx_v, 0 };
     iterarVertices(grafo, &cm, mapearV);
-
+ 
     // 3. Kosaraju — 1ª passagem
     int* visitado = calloc(n, sizeof(int));
     Pilha* pilha = criarPilha(n);
-
+ 
     CtxKosaraju ctx_k = { grafo, visitado, NULL, pilha, idx_v, n };
     for (int i = 0; i < n; i++)
         if (!visitado[i]) dfs1(&ctx_k, i);
-
+ 
     // 4. Kosaraju — 2ª passagem no transposto
     int* componente = malloc(sizeof(int) * n);
     for (int i = 0; i < n; i++) componente[i] = -1;
     ctx_k.componente = componente;
-
+ 
     int n_comp = 0, idx;
     while ((idx = desempilhar(pilha)) != -1)
         if (componente[idx] < 0) dfs2(&ctx_k, idx, n_comp++);
-
+ 
     // 5. Reabilita todas as arestas
     habilitarTodasArestas(grafo);
-
+ 
     fprintf(fTxt, "regs %.2lf: %d componente(s) fortemente conexo(s)\n", vl, n_comp);
-
+ 
     // 6. Bounding boxes por componente
     double* mn_x = malloc(sizeof(double) * n_comp);
     double* mn_y = malloc(sizeof(double) * n_comp);
@@ -395,7 +389,7 @@ void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
         if (x > mx_x[c]) mx_x[c] = x;
         if (y > mx_y[c]) mx_y[c] = y;
     }
-
+ 
     double margem = 5.0;
     for (int i = 0; i < n_comp; i++) {
         char cor[10];
@@ -404,7 +398,7 @@ void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
             " fill=\"%s\" fill-opacity=\"0.5\" stroke=\"gray\" stroke-width=\"1\"/>\n",
             mn_x[i]-margem, mn_y[i]-margem, (mx_x[i]-mn_x[i])+2*margem, (mx_y[i]-mn_y[i])+2*margem, cor);
     }
-
+ 
     free(mn_x); 
     free(mn_y); 
     free(mx_x); 
@@ -415,7 +409,7 @@ void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
     destruirPilha(pilha);
 }
 
-// exp — AGM (Prim) + aumenta vm 50% nas arestas lentas
+// exp — AGM (Kruskal) + aumenta vm 50% nas arestas lentas
 
 typedef struct {
     int* visitado;
@@ -424,66 +418,95 @@ typedef struct {
     int* invertida;  // 1 se a aresta foi usada no sentido inverso (não-direcionado)
 } CtxPrim;
 
-// Prim não-direcionado: avalia a aresta se UM dos extremos está visitado e o OUTRO não — trata o grafo direcionado como não-direcionado.
-static void avaliarArestaPrim(Aresta a, void* ctx) {
-    CtxPrim* c = (CtxPrim*)ctx;
-    int io = getVerticeIndice(getArestaOrigem(a));
-    int id = getVerticeIndice(getArestaDestino(a));
-
-    // Caso direcionado normal: origem visitada, destino não
-    int caso1 = c->visitado[io] && !c->visitado[id];
-    // Caso não-direcionado: destino visitado, origem não
-    int caso2 = c->visitado[id] && !c->visitado[io];
-
-    if (!caso1 && !caso2) return;
-    if (getArestaCmp(a) < *c->menor_peso) {
-        *c->menor_peso = getArestaCmp(a);
-        *c->melhor = a;
-        *c->invertida = caso2; // sinaliza se a aresta foi usada ao contrário
+typedef struct { 
+    int* pai; 
+    int n; 
+} UF;
+ 
+static UF* uf_criar(int n) {
+    UF* uf = malloc(sizeof(UF));
+    uf->pai = malloc(sizeof(int) * n);
+    uf->n = n;
+    for (int i = 0; i < n; i++) uf->pai[i] = i;
+    return uf;
+}
+ 
+static void uf_destruir(UF* uf) { 
+    free(uf->pai); 
+    free(uf); 
+}
+ 
+static int uf_find_k(UF* uf, int x) {
+    while (uf->pai[x] != x) {
+        uf->pai[x] = uf->pai[uf->pai[x]];
+        x = uf->pai[x];
     }
+    return x;
 }
-
-typedef struct {
-    Vertice* primeiro; 
-} CtxPrimeiro;
-
-static void pegarPrimeiro(Vertice v, void* ctx) {
-    CtxPrimeiro* c = (CtxPrimeiro*)ctx;
-    if (!(*c->primeiro)) *c->primeiro = v;
+ 
+static int uf_unir_k(UF* uf, int a, int b) {
+    a = uf_find_k(uf, a); 
+    b = uf_find_k(uf, b);
+    if (a == b) return 0;
+    uf->pai[b] = a;
+    return 1;
 }
-
+ 
+// Array de arestas para o Kruskal
+typedef struct { 
+    Aresta a; 
+    double cmp; 
+    int io, id; 
+} KEdge;
+ 
+typedef struct { 
+    KEdge* arr; 
+    int n, cap; 
+} CtxKruskal;
+ 
+static void coletarArestaKruskal(Aresta a, void* ctx) {
+    CtxKruskal* c = (CtxKruskal*)ctx;
+    if (c->n >= c->cap) return;
+    c->arr[c->n].a = a;
+    c->arr[c->n].cmp = getArestaCmp(a);
+    c->arr[c->n].io = getVerticeIndice(getArestaOrigem(a));
+    c->arr[c->n].id = getVerticeIndice(getArestaDestino(a));
+    c->n++;
+}
+ 
+static int cmpKEdge(const void* a, const void* b) {
+    double da = ((KEdge*)a)->cmp, db = ((KEdge*)b)->cmp;
+    return (da > db) - (da < db);
+}
+ 
 void comando_exp(void* grafo, double vl, FILE* fSvg) {
     int n = getNumVertices(grafo);
-    int* visitado = calloc(n, sizeof(int));
-
-    Vertice primeiro = NULL;
-    CtxPrimeiro cp = { &primeiro };
-    iterarVertices(grafo, &cp, pegarPrimeiro);
-    if (!primeiro) { free(visitado); return; }
-
-    visitado[getVerticeIndice(primeiro)] = 1;
-
-    for (int iter = 0; iter < n - 1; iter++) {
-        double menor_peso = DBL_MAX;
-        Aresta melhor = NULL;
-        int invertida = 0;
-        CtxPrim ctx = { visitado, &menor_peso, &melhor, &invertida };
-        iterarArestas(grafo, &ctx, avaliarArestaPrim);
-
-        if (!melhor) break;
-
-        // Marca o vértice não-visitado como visitado. Se a aresta foi usada invertida, o vértice novo é a origem.
-        int idx_novo = invertida ? getVerticeIndice(getArestaOrigem(melhor)) : getVerticeIndice(getArestaDestino(melhor));
-        visitado[idx_novo] = 1;
-
-        if (getArestaVm(melhor) < vl) {
-            setArestaVm(melhor, getArestaVm(melhor) * 1.5);
-            fprintf(fSvg, "\t<line x1=\"%lf\" y1=\"%lf\" x2=\"%lf\" y2=\"%lf\"" " stroke=\"red\" stroke-width=\"4\"/>\n",
-                getVerticeX(getArestaOrigem(melhor)), getVerticeY(getArestaOrigem(melhor)),
-                getVerticeX(getArestaDestino(melhor)), getVerticeY(getArestaDestino(melhor)));
+    int m = getNumArestas(grafo);
+ 
+    // Coleta todas as arestas
+    KEdge* arr = malloc(sizeof(KEdge) * m);
+    CtxKruskal ctx = { arr, 0, m };
+    iterarArestas(grafo, &ctx, coletarArestaKruskal);
+ 
+    // Ordena por comprimento crescente (Kruskal)
+    qsort(arr, ctx.n, sizeof(KEdge), cmpKEdge);
+ 
+    // Kruskal: constrói AGM e pinta lentas de vermelho
+    UF* uf = uf_criar(n);
+    for (int i = 0; i < ctx.n; i++) {
+        if (uf_unir_k(uf, arr[i].io, arr[i].id)) {
+            // Aresta entrou na AGM — verifica se é lenta
+            if (getArestaVm(arr[i].a) < vl) {
+                setArestaVm(arr[i].a, getArestaVm(arr[i].a) * 1.5);
+                fprintf(fSvg, "\t<line x1=\"%lf\" y1=\"%lf\" x2=\"%lf\" y2=\"%lf\"" " stroke=\"red\" stroke-width=\"4\"/>\n",
+                    getVerticeX(getArestaOrigem(arr[i].a)), getVerticeY(getArestaOrigem(arr[i].a)),
+                    getVerticeX(getArestaDestino(arr[i].a)), getVerticeY(getArestaDestino(arr[i].a)));
+            }
         }
     }
-    free(visitado);
+ 
+    uf_destruir(uf);
+    free(arr);
 }
 
 // p? — caminhos mínimos animados

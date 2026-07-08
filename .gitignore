@@ -10,8 +10,6 @@ ted
 
 # Arquivos de objeto e bibliotecas
 *.o
-*.hf
-*.hfd
 
 # Arquivos temporários e de log
 *.log

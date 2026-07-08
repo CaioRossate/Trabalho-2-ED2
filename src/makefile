@@ -59,4 +59,4 @@ run_tests: tests
 
 clean:
 	rm -rf $(BUILD_DIR) $(BIN) $(TEST_BINS)
-	rm -f *.hf *.hfc *.hfd
+	

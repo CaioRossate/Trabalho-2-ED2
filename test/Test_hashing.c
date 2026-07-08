@@ -13,12 +13,11 @@ typedef struct __attribute__((packed)) {
 Hash h;
 
 void setUp(void) {
-    h = inicializarHash("teste_unidade.hf", 1, sizeof(ItemTeste));
+    h = inicializarHash(1, sizeof(ItemTeste));
 }
 
 void tearDown(void) {
     encerrarHash(h);
-    remove("teste_unidade.hf");
 }
 
 // Testes

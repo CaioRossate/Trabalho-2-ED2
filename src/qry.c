@@ -36,20 +36,25 @@ static void coordEndereco(Hash h_q, char* cep, char face, double num, double* ex
     double w = getQuadraW(qbuf), h = getQuadraH(qbuf);
 
     if (face == 'N') { 
-        *ex = x + (num/100.0)*w; 
-        *ey = y;     }
+        *ex = x + num; 
+        *ey = y + h;     }
     else if (face == 'S') { 
-        *ex = x + (num/100.0)*w; 
-        *ey = y + h; 
+        *ex = x + num; 
+        *ey = y; 
     }
     else if (face == 'L') { 
-        *ex = x + w;
-        *ey = y + (num/100.0)*h; 
+        *ex = x;
+        *ey = y + num; 
     }
     else if (face == 'O') { 
-        *ex = x; 
-        *ey = y + (num/100.0)*h; 
+        *ex = x + w; 
+        *ey = y + num; 
+    } else {
+        fprintf(stderr, "\n Erro: face invalida '%c' para cep %s\n", face, cep);
+
     }
+
+
     free(qbuf);
 }
 
@@ -223,124 +228,129 @@ void comando_mvm(void* grafo, double v, double x, double y, double w, double h) 
     iterarArestas(grafo, &ctx, atualizarVmRegiao);
 }
 
-// regs — componentes FORTEMENTE conexos (Kosaraju)
+// regs — CFCs com Tarjan
 
-// Pilha simples para a primeira DFS
-typedef struct { 
-    int* dados; 
-    int topo, cap; 
-} Pilha;
- 
-static Pilha* criarPilha(int cap) {
-    Pilha* p = malloc(sizeof(Pilha));
-    p->dados = malloc(sizeof(int) * cap);
-    p->topo = 0; p->cap = cap;
-    return p;
-}
-static void destruirPilha(Pilha* p) { 
-    if (p) { 
-        free(p->dados); 
-        free(p); 
-    } 
-}
-static void empilhar(Pilha* p, int v) { 
-    if (p->topo < p->cap) p->dados[p->topo++] = v; 
-}
-static int desempilhar(Pilha* p) { 
-    return p->topo > 0 ? p->dados[--p->topo] : -1; 
-}
- 
-// Contexto compartilhado pelas duas DFS
-typedef struct {
-    Grafo grafo;
-    int* visitado;
-    int* componente;
-    Pilha* pilha;
-    Vertice* idx_para_v;
-    int n;
-} CtxKosaraju;
- 
-// DFS iterativa — 1ª passagem: empilha por ordem de término
-static void dfs1(CtxKosaraju* ctx, int inicio) {
-    int* trabalho = malloc(sizeof(int) * ctx->n * 2);
-    int topo = 0;
-    trabalho[topo++] = inicio;
-    trabalho[topo++] = 0;
- 
-    while (topo > 0) {
-        int estado = trabalho[--topo];
-        int idx = trabalho[--topo];
- 
-        if (estado == 1) { 
-            empilhar(ctx->pilha, idx); 
-            continue; 
-        }
-        if (ctx->visitado[idx]) continue;
-        ctx->visitado[idx] = 1;
- 
-        trabalho[topo++] = idx;
-        trabalho[topo++] = 1;
- 
-        int n_viz = 0;
-        int* viz = getVizinhosAtivos(ctx->grafo, ctx->idx_para_v[idx], &n_viz);
-        for (int i = 0; i < n_viz; i++) {
-            if (!ctx->visitado[viz[i]]) {
-                trabalho[topo++] = viz[i];
-                trabalho[topo++] = 0;
-            }
-        }
-        free(viz);
-    }
-    free(trabalho);
-}
- 
-// DFS iterativa — 2ª passagem no transposto: marca componentes
-static void dfs2(CtxKosaraju* ctx, int inicio, int comp_id) {
-    int* pilha_local = malloc(sizeof(int) * ctx->n);
-    int topo = 0;
-    pilha_local[topo++] = inicio;
- 
-    while (topo > 0) {
-        int idx = pilha_local[--topo];
-        if (ctx->componente[idx] >= 0) continue;
-        ctx->componente[idx] = comp_id;
- 
-        int n_viz = 0;
-        int* viz = getVizinhosInversos(ctx->grafo, ctx->idx_para_v[idx], &n_viz);
-        for (int i = 0; i < n_viz; i++)
-            if (ctx->componente[viz[i]] < 0)
-                pilha_local[topo++] = viz[i];
-        free(viz);
-    }
-    free(pilha_local);
-}
- 
-// Contexto para montar mapa índice -> Vertice
+// Struct para montar mapa índice -> Vertice
 typedef struct { 
     Vertice* mapa; 
     int pos; 
 } CtxMapaV;
-    
+
 static void mapearV(Vertice v, void* ctx) {
     CtxMapaV* c = (CtxMapaV*)ctx;
     c->mapa[c->pos++] = v;
 }
  
 // Desabilita arestas rápidas (vm >= vl)
-typedef struct { double vl; } CtxDesabilitar;
+typedef struct { 
+    double vl; 
+} CtxDesabilitar;
+
 static void desabilitarRapidas(Aresta a, void* ctx) {
     CtxDesabilitar* c = (CtxDesabilitar*)ctx;
-    if (getArestaVm(a) >= c->vl) desabilitarAresta(a);
+    if (getArestaVm(a) < c->vl) desabilitarAresta(a);
 }
  
 static void gerarCorAleatoria(char* buffer) {
     sprintf(buffer, "#%06X", rand() % 0xFFFFFF);
 }
  
+// Estado do Tarjan por vértice
+typedef struct {
+    int disc; // tempo de descoberta (-1 = não visitado)
+    int low; // menor disc alcançável 
+    int na_pilha; // 1 se está na pilha do Tarjan 
+    int componente; // id do CFC (-1 = ainda não atribuído)
+} TarjanV;
+ 
+typedef struct {
+    Grafo grafo;
+    TarjanV* tv;
+    int* pilha; // pilha de índices
+    int topo,timer, n_comp;
+    Vertice* idx_v;
+    int n;
+} CtxTarjan;
+ 
+// DFS iterativa do Tarjan
+static void tarjan_dfs(CtxTarjan* ctx, int inicio) {
+    // Pilha de trabalho: (índice, ponteiro para vizinhos, pos_vizinho)
+    // array de structs para simular a recursão                  */
+    typedef struct { 
+        int idx; 
+        int* viz; 
+        int n_viz, i_viz; 
+    } Frame;
+
+    Frame* frames = malloc(sizeof(Frame) * ctx->n);
+    int topo_f = 0;
+ 
+    // Empilha o frame inicial 
+    Frame f0;
+    f0.idx = inicio;
+    f0.viz = getVizinhosAtivos(ctx->grafo, ctx->idx_v[inicio], &f0.n_viz);
+    f0.i_viz = 0;
+    ctx->tv[inicio].disc = ctx->timer;
+    ctx->tv[inicio].low = ctx->timer;
+    ctx->tv[inicio].na_pilha = 1;
+    ctx->timer++;
+    ctx->pilha[ctx->topo++] = inicio;
+    frames[topo_f++] = f0;
+ 
+    while (topo_f > 0) {
+        Frame* cur = &frames[topo_f - 1];
+ 
+        if (cur->i_viz < cur->n_viz) {
+            int w = cur->viz[cur->i_viz++];
+ 
+            if (ctx->tv[w].disc == -1) {
+                // Vértice não visitado — empilha novo frame
+                Frame fn;
+                fn.idx = w;
+                fn.viz = getVizinhosAtivos(ctx->grafo, ctx->idx_v[w], &fn.n_viz);
+                fn.i_viz = 0;
+                ctx->tv[w].disc = ctx->timer;
+                ctx->tv[w].low = ctx->timer;
+                ctx->tv[w].na_pilha = 1;
+                ctx->timer++;
+                ctx->pilha[ctx->topo++] = w;
+                frames[topo_f++] = fn;
+            } else if (ctx->tv[w].na_pilha) {
+                // Back edge — atualiza low
+                if (ctx->tv[w].disc < ctx->tv[cur->idx].low)
+                    ctx->tv[cur->idx].low = ctx->tv[w].disc;
+            }
+        } else {
+            // Terminou de explorar cur->idx
+            free(cur->viz);
+            topo_f--;
+ 
+            if (topo_f > 0) {
+                Frame* pai = &frames[topo_f - 1];
+                // Propaga low para o pai
+                if (ctx->tv[cur->idx].low < ctx->tv[pai->idx].low)
+                    ctx->tv[pai->idx].low = ctx->tv[cur->idx].low;
+            }
+ 
+            // Verifica se cur->idx é raiz de um CFC
+            if (ctx->tv[cur->idx].low == ctx->tv[cur->idx].disc) {
+                int comp_id = ctx->n_comp++;
+                int w;
+                do {
+                    w = ctx->pilha[--ctx->topo];
+                    ctx->tv[w].na_pilha  = 0;
+                    ctx->tv[w].componente = comp_id;
+                } while (w != cur->idx);
+            }
+        }
+    }
+    free(frames);
+}
+ 
 void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
     int n = getNumVertices(grafo);
  
-    // 1. Desabilita arestas rápidas (vm >= vl)
+    // 1. Desabilita arestas rápidas
     habilitarTodasArestas(grafo);
     CtxDesabilitar ctx_des = { vl };
     iterarArestas(grafo, &ctx_des, desabilitarRapidas);
@@ -350,26 +360,26 @@ void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
     CtxMapaV cm = { idx_v, 0 };
     iterarVertices(grafo, &cm, mapearV);
  
-    // 3. Kosaraju — 1ª passagem
-    int* visitado = calloc(n, sizeof(int));
-    Pilha* pilha = criarPilha(n);
+    // 3. Inicializa estado do Tarjan
+    TarjanV* tv = malloc(sizeof(TarjanV) * n);
+    for (int i = 0; i < n; i++) {
+        tv[i].disc = -1;
+        tv[i].low = -1;
+        tv[i].na_pilha = 0;
+        tv[i].componente = -1;
+    }
  
-    CtxKosaraju ctx_k = { grafo, visitado, NULL, pilha, idx_v, n };
+    int* pilha_tarjan = malloc(sizeof(int) * n);
+    CtxTarjan ctx_t = { grafo, tv, pilha_tarjan, 0, 0, 0, idx_v, n };
+ 
+    // 4. Roda Tarjan em todos os vértices não visitados
     for (int i = 0; i < n; i++)
-        if (!visitado[i]) dfs1(&ctx_k, i);
- 
-    // 4. Kosaraju — 2ª passagem no transposto
-    int* componente = malloc(sizeof(int) * n);
-    for (int i = 0; i < n; i++) componente[i] = -1;
-    ctx_k.componente = componente;
- 
-    int n_comp = 0, idx;
-    while ((idx = desempilhar(pilha)) != -1)
-        if (componente[idx] < 0) dfs2(&ctx_k, idx, n_comp++);
+        if (tv[i].disc == -1) tarjan_dfs(&ctx_t, i);
  
     // 5. Reabilita todas as arestas
     habilitarTodasArestas(grafo);
  
+    int n_comp = ctx_t.n_comp;
     fprintf(fTxt, "regs %.2lf: %d componente(s) fortemente conexo(s)\n", vl, n_comp);
  
     // 6. Bounding boxes por componente
@@ -378,24 +388,29 @@ void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
     double* mx_x = malloc(sizeof(double) * n_comp);
     double* mx_y = malloc(sizeof(double) * n_comp);
     for (int i = 0; i < n_comp; i++) {
-        mn_x[i] = DBL_MAX; mn_y[i] = DBL_MAX;
-        mx_x[i] = -DBL_MAX; mx_y[i] = -DBL_MAX;
+        mn_x[i] = 1e18; mn_y[i] = 1e18;
+        mx_x[i] = -1e18; mx_y[i] = -1e18;
     }
     for (int i = 0; i < n; i++) {
-        int c = componente[i];
-        double x = getVerticeX(idx_v[i]), y = getVerticeY(idx_v[i]);
+        int c = tv[i].componente;
+        if (c < 0) continue;
+        double x = getVerticeX(idx_v[i]);
+        double y = getVerticeY(idx_v[i]);
         if (x < mn_x[c]) mn_x[c] = x;
         if (y < mn_y[c]) mn_y[c] = y;
         if (x > mx_x[c]) mx_x[c] = x;
         if (y > mx_y[c]) mx_y[c] = y;
     }
  
-    double margem = 5.0;
+    double margem = 10.0;
     for (int i = 0; i < n_comp; i++) {
+        // Pula componentes de vértice único (tamanho pontual)
+        if (mn_x[i] > 1e17) continue;
         char cor[10];
         gerarCorAleatoria(cor);
-        fprintf(fSvg, "\t<rect x=\"%lf\" y=\"%lf\" width=\"%lf\" height=\"%lf\""
-            " fill=\"%s\" fill-opacity=\"0.5\" stroke=\"gray\" stroke-width=\"1\"/>\n",
+        
+        fprintf(fSvg,
+            "\t<rect x=\"%lf\" y=\"%lf\" width=\"%lf\" height=\"%lf\"" " fill=\"%s\" fill-opacity=\"0.5\" stroke=\"gray\" stroke-width=\"1\"/>\n",
             mn_x[i]-margem, mn_y[i]-margem, (mx_x[i]-mn_x[i])+2*margem, (mx_y[i]-mn_y[i])+2*margem, cor);
     }
  
@@ -403,10 +418,9 @@ void comando_regs(void* grafo, double vl, FILE* fTxt, FILE* fSvg) {
     free(mn_y); 
     free(mx_x); 
     free(mx_y);
-    free(componente); 
-    free(visitado); 
+    free(tv); 
+    free(pilha_tarjan); 
     free(idx_v);
-    destruirPilha(pilha);
 }
 
 // exp — AGM (Kruskal) + aumenta vm 50% nas arestas lentas
@@ -518,7 +532,7 @@ static void desenharPercurso(Vertice* cam, int tam, const char* cor, const char*
         fprintf(fSvg, " L%lf,%lf", getVerticeX(cam[i]), getVerticeY(cam[i]));
     fprintf(fSvg, "\" stroke=\"%s\" stroke-width=\"3\" fill=\"none\"/>\n", cor);
 
-    fprintf(fSvg, "\t<text font-size=\"16\">\n" "\t <animateMotion dur=\"4s\" repeatCount=\"indefinite\" rotate=\"auto-reverse\">\n"
+    fprintf(fSvg, "\t<text font-size=\"50\">\n" "\t <animateMotion dur=\"4s\" repeatCount=\"indefinite\" rotate=\"auto-reverse\">\n"
     "\t <mpath xlink:href=\"#%s\"/>\n" "\t </animateMotion>\n" "\t 🚗\n" "\t</text>\n", id_path);
 }
 

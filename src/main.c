@@ -25,27 +25,48 @@ int main(int argc, char* argv[]) {
 
     srand((unsigned int)time(NULL));
 
+    const char* uso = "Uso: ted [-e path] -f arq.geo [-q consulta.qry] [-v arq.via] -o dir\n";
+
     char* flags[] = {"-e", "-o", "-f", "-q", "-v"};
     char** paths  = calloc(5, sizeof(char*));
 
-    for (int i = 1; i < argc; i += 2)
-        for (int j = 0; j < 5; j++)
-            if (i + 1 < argc && strcmp(argv[i], flags[j]) == 0)
-                paths[j] = argv[i + 1];
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            printf("%s", uso);
+            free(paths);
+            return 0;
+        }
+
+        int reconhecida = 0;
+        for (int j = 0; j < 5; j++) {
+            if (strcmp(argv[i], flags[j]) == 0) {
+                reconhecida = 1;
+                if (i + 1 < argc) {
+                    paths[j] = argv[++i];
+                } else {
+                    fprintf(stderr, "Erro: flag '%s' requer um argumento.\n", argv[i]);
+                }
+                break;
+            }
+        }
+        if (!reconhecida)
+            fprintf(stderr, "Aviso: argumento desconhecido ignorado: '%s'\n", argv[i]);
+    }
 
     if (!paths[SAIDA] || !paths[GEO]) {
-        printf("Uso: ted [-e path] -f arq.geo [-q consulta.qry] [-v arq.via] -o dir\n");
+        fprintf(stderr, "%s", uso);
         free(paths);
         return 1;
     }
 
     // Hash de quadras
-    Hash hashQuadras = inicializarHash("quadras.hf", 5, getQuadraSize());
+    Hash hashQuadras = inicializarHash(5, getQuadraSize());
     if (!hashQuadras) {
-        printf("Erro ao inicializar hash de quadras.\n");
+        fprintf(stderr, "Erro ao inicializar hash de quadras.\n");
         free(paths);
         return 1;
     }
+
 
     char* pathGeo = concatenarCaminho(paths[ENTRADA], paths[GEO]);
     processarArquivoGeo(pathGeo, hashQuadras);
@@ -55,7 +76,7 @@ int main(int argc, char* argv[]) {
     if (paths[VIA]) {
         char* pathVia = concatenarCaminho(paths[ENTRADA], paths[VIA]);
         grafo = processarArquivoVia(pathVia);
-        if (!grafo) printf("Aviso: nao foi possivel carregar o arquivo .via: %s\n", pathVia);
+        if (!grafo) fprintf(stderr, "Aviso: nao foi possivel carregar o arquivo .via: %s\n", pathVia);
         free(pathVia);
     }
 
@@ -80,8 +101,8 @@ int main(int argc, char* argv[]) {
 
         FILE* fTxt = fopen(pathTxt, "w");
         FILE* fSvg = fopen(pathSvg, "w");
-        if (!fTxt) printf("Erro ao criar TXT: %s\n", pathTxt);
-        if (!fSvg) printf("Erro ao criar SVG: %s\n", pathSvg);
+        if (!fTxt) fprintf(stderr, "Erro ao criar TXT: %s\n", pathTxt);
+        if (!fSvg) fprintf(stderr, "Erro ao criar SVG: %s\n", pathSvg);
 
         if (fTxt && fSvg) {
             // Pré-leitura dos CEPs removidos (retorna 0 no T2)
@@ -128,9 +149,7 @@ int main(int argc, char* argv[]) {
         free(pathQry);
     }
 
-    // Relatório do hash
-    gerarRelatorioHash(hashQuadras, "relatorio_quadras.hfd");
-
+    
     // Liberação
     encerrarHash(hashQuadras);
     if (grafo) destruirGrafo(grafo);

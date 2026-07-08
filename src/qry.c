@@ -131,7 +131,7 @@ int coletarCepsRemovidos(const char* path_qry, char ceps_out[][20], int max_ceps
 void processarArquivoQry(const char* path_qry, Hash h_q, void* grafo, FILE* fTxt, FILE* fSvg) {
     FILE* arq = fopen(path_qry, "r");
     if (!arq) { 
-        printf("Erro ao abrir .qry: %s\n", path_qry); 
+        fprintf(stderr, "Erro ao abrir .qry: %s\n", path_qry); 
         return; 
     }
 
@@ -564,35 +564,43 @@ void comando_p(void* grafo, int reg1, int reg2, char* cc, char* cr, FILE* fTxt, 
     int tam_t = 0;
     Vertice* cam_t = reconstruirCaminho(rt, destino, &tam_t);
 
-    if (!cam_d) {
+    if (!cam_d && !cam_t) {
         fprintf(fTxt, "p? R%d R%d: destino inacessivel.\n", reg1, reg2);
     } else {
         // TXT — mais curto
-        fprintf(fTxt, "p? R%d->R%d (mais curto, %.2lf m): ", reg1, reg2, getCusto(rd, destino));
-        for (int i = 0; i < tam_d; i++)
-            fprintf(fTxt, "%s%s", getVerticeId(cam_d[i]), i<tam_d-1?" -> ":"");
-        fprintf(fTxt, "\n\n");
-        fprintf(fTxt, " Origem : %s\n", getVerticeId(cam_d[0]));
-        fprintf(fTxt, " Destino: %s\n", getVerticeId(cam_d[tam_d-1]));
-        fprintf(fTxt, " Percurso: %d segmentos\n\n", tam_d - 1);
+        if (cam_d) {
+            fprintf(fTxt, "p? R%d->R%d (mais curto, %.2lf m): ", reg1, reg2, getCusto(rd, destino));
+            for (int i = 0; i < tam_d; i++)
+                fprintf(fTxt, "%s%s", getVerticeId(cam_d[i]), i<tam_d-1?" -> ":"");
+            fprintf(fTxt, "\n\n");
+            fprintf(fTxt, " Origem : %s\n", getVerticeId(cam_d[0]));
+            fprintf(fTxt, " Destino: %s\n", getVerticeId(cam_d[tam_d-1]));
+            fprintf(fTxt, " Percurso: %d segmentos\n\n", tam_d - 1);
+        } else {
+            fprintf(fTxt, "p? R%d->R%d (mais curto): destino inacessivel por distancia.\n\n", reg1, reg2);
+        }
 
         // TXT — mais rápido
-        fprintf(fTxt, "p? R%d->R%d (mais rapido, %.2lf s): ", reg1, reg2, getCusto(rt, destino));
-        for (int i = 0; i < tam_t; i++)
-            fprintf(fTxt, "%s%s", getVerticeId(cam_t[i]), i<tam_t-1?" -> ":"");
-        fprintf(fTxt, "\n\n");
-        fprintf(fTxt, " Origem : %s\n", getVerticeId(cam_t[0]));
-        fprintf(fTxt, " Destino: %s\n", getVerticeId(cam_t[tam_t-1]));
-        fprintf(fTxt, " Percurso: %d segmentos\n\n", tam_t - 1);
+        if (cam_t) {
+            fprintf(fTxt, "p? R%d->R%d (mais rapido, %.2lf s): ", reg1, reg2, getCusto(rt, destino));
+            for (int i = 0; i < tam_t; i++)
+                fprintf(fTxt, "%s%s", getVerticeId(cam_t[i]), i<tam_t-1?" -> ":"");
+            fprintf(fTxt, "\n\n");
+            fprintf(fTxt, " Origem : %s\n", getVerticeId(cam_t[0]));
+            fprintf(fTxt, " Destino: %s\n", getVerticeId(cam_t[tam_t-1]));
+            fprintf(fTxt, " Percurso: %d segmentos\n\n", tam_t - 1);
+        } else {
+            fprintf(fTxt, "p? R%d->R%d (mais rapido): destino inacessivel por tempo.\n\n", reg1, reg2);
+        }
 
-        // SVG — percursos animados
+        // SVG — percursos animados (só desenha o que existir)
         static int id_seq = 0;
         char id_d[32], id_t[32];
         snprintf(id_d, sizeof(id_d), "path_d_%d", id_seq);
         snprintf(id_t, sizeof(id_t), "path_t_%d", id_seq++);
 
-        desenharPercurso(cam_d, tam_d, cc, id_d, fSvg);
-        desenharPercurso(cam_t, tam_t, cr, id_t, fSvg);
+        if (cam_d) desenharPercurso(cam_d, tam_d, cc, id_d, fSvg);
+        if (cam_t) desenharPercurso(cam_t, tam_t, cr, id_t, fSvg);
 
         // Placas I e F
         desenharPlaca(getVerticeX(origem),  getVerticeY(origem),  "I", fSvg);

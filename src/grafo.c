@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "grafo.h"
+#include "hashing.h"
 
 
 typedef struct aresta_no {
@@ -36,14 +37,25 @@ typedef struct {
     aresta_t* ultima_a;
     int num_vertices;
     int num_arestas;
+    Hash indice_vertices; // id -> vertice_t*, para busca 0(1) 
 } grafo_t;
 
+typedef struct __attribute__((packed)) {
+    char id[64];
+    vertice_t* v;
+} vertice_idx_t;
 
 // Grafo
 
 Grafo criarGrafo(int capacidade_vertices) {
     (void)capacidade_vertices; // lista encadeada
     grafo_t* g = calloc(1, sizeof(grafo_t));
+    if (!g) return NULL;
+    g->indice_vertices = inicializarHash(8, sizeof(vertice_idx_t));
+    if (!g->indice_vertices) { 
+        free(g); 
+        return NULL; 
+    }
     return (Grafo)g;
 }
 
@@ -72,6 +84,7 @@ void destruirGrafo(Grafo g) {
         free(a);
         a = ta;
     }
+    if (gr->indice_vertices) encerrarHash(gr->indice_vertices);
 
     free(gr);
 }
@@ -102,18 +115,22 @@ Vertice inserirVertice(Grafo g, const char* id, double x, double y) {
         gr->ultimo_v = v;
     }
     gr->num_vertices++;
+
+    vertice_idx_t idxreg;
+    memset(idxreg.id, 0, sizeof(idxreg.id));
+    strncpy(idxreg.id, v->id, sizeof(idxreg.id) - 1);
+    idxreg.v = v;
+    inserirHash(gr->indice_vertices, &idxreg);
+
     return (Vertice)v;
 }
 
 Vertice buscarVertice(Grafo g, const char* id) {
     if (!g || !id) return NULL;
     grafo_t* gr = (grafo_t*)g;
-    vertice_t* v = gr->vertices;
-    while (v) {
-        if (strcmp(v->id, id) == 0) return (Vertice)v;
-        v = v->prox;
-    }
-    return NULL;
+    vertice_idx_t idxreg;
+    if (!buscarHash(gr->indice_vertices, (char*)id, &idxreg)) return NULL;
+    return (Vertice)idxreg.v;
 }
 
 int getNumVertices(Grafo g) {
@@ -264,40 +281,6 @@ int* getVizinhosAtivos(Grafo g, Vertice v, int* n_vizinhos) {
         no = no->prox;
     }
     return buf;
-}
- 
-int* getVizinhosInversos(Grafo g, Vertice v, int* n_vizinhos) {
-    *n_vizinhos = 0;
-    if (!g || !v) return NULL;
-    grafo_t* gr = (grafo_t*)g;
-    // Conta arestas ativas cujo destino é v
-    int cap = 0;
-    aresta_t* a = gr->arestas;
-    while (a) { 
-        if (a->ativo && (Vertice)a->destino == v) cap++; 
-        a = a->prox_global; 
-    }
-    if (cap == 0) return NULL;
-    int* buf = malloc(sizeof(int) * cap);
-    a = gr->arestas;
-    while (a) {
-        if (a->ativo && (Vertice)a->destino == v)
-            buf[(*n_vizinhos)++] = a->origem->indice;
-        a = a->prox_global;
-    }
-    return buf;
-}
-
-// Percorre a lista global procurando arestas cujo DESTINO é v.
-// Isso simula o grafo transposto sem precisar criá-lo em memória.
-void iterarAdjacentesInverso(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta, void*)) {
-    if (!g || !v || !visitar) return;
-    aresta_t* a = ((grafo_t*)g)->arestas;
-    while (a) {
-        if (a->ativo && (Vertice)a->destino == v)
-            visitar((Aresta)a, contexto);
-        a = a->prox_global;
-    }
 }
 
 void iterarVertices(Grafo g, void* contexto, void (*visitar)(Vertice, void*)) {

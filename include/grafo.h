@@ -210,16 +210,6 @@ void habilitarTodasArestas(Grafo g);
 int* getVizinhosAtivos(Grafo g, Vertice v, int* n_vizinhos);
 
 /**
- * @brief Retorna array de índices dos vértices que chegam em v (transposto).
- * @details Aloca dinamicamente.
- * @param g O grafo.
- * @param v O vértice de destino.
- * @param n_vizinhos Saída: número de vizinhos encontrados.
- * @return Array de índices inteiros, ou NULL se não houver vizinhos.
- */
-int* getVizinhosInversos(Grafo g, Vertice v, int* n_vizinhos);
-
-/**
  * @brief Itera sobre todas as arestas que saem de um vértice.
  * @param g O grafo.
  * @param v O vértice de origem.
@@ -227,17 +217,6 @@ int* getVizinhosInversos(Grafo g, Vertice v, int* n_vizinhos);
  * @param visitar Função chamada para cada aresta saindo de v.
  */
 void iterarAdjacentes(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta aresta, void* contexto));
-
-/**
- * @brief Itera sobre todas as arestas que CHEGAM em um vértice (grafo transposto).
- * @details Usado pelo algoritmo de Kosaraju na segunda passagem de DFS.
- * Percorre a lista global de arestas procurando aquelas cujo destino é v.
- * @param g O grafo.
- * @param v O vértice de destino.
- * @param contexto Dado extra passado para a função de visita.
- * @param visitar Função chamada para cada aresta chegando em v.
- */
-void iterarAdjacentesInverso(Grafo g, Vertice v, void* contexto, void (*visitar)(Aresta aresta, void* contexto));
 
 /**
  * @brief Itera sobre todos os vértices do grafo.
